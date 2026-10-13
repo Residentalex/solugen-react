@@ -316,7 +316,6 @@ const Conteos: React.FC = () => {
           filtros={
             <RangePicker
               style={{ width: '100%', maxWidth: 200 }}
-              format="YYYY-MM-DD"
               onChange={handleDateChange}
               placeholder={["Desde", "Hasta"]}
             />

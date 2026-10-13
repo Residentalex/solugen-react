@@ -2373,7 +2373,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
                       label="Fecha"
                       rules={[{ required: true, message: 'Seleccione la fecha' }]}
                     >
-                      <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                      <DatePicker style={{ width: '100%' }}
                         disabledDate={(current) => {
                           if (!current) return false;
                           const cierre = fechasCierre?.[sucursalActiva];
@@ -2386,7 +2386,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
                     <Form.Item name="fechaAnt" label="Fecha Período Anterior">
-                      <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" disabled
+                      <DatePicker style={{ width: '100%' }} disabled
                         disabledDate={(current) => {
                           if (!current) return false;
                           const cierre = fechasCierre?.[sucursalActiva];
@@ -2510,7 +2510,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
                     label="Fecha"
                     rules={[{ required: true, message: 'Seleccione la fecha' }]}
                   >
-                    <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                    <DatePicker style={{ width: '100%' }}
                       disabledDate={(current) => {
                         if (!current) return false;
                         const cierre = fechasCierre?.[sucursalActiva];
@@ -2523,7 +2523,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
                 </Col>
                 <Col xs={24} sm={12}>
                   <Form.Item name="fechaAnt" label="Fecha Período Anterior">
-                    <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" disabled
+                    <DatePicker style={{ width: '100%' }} disabled
                       disabledDate={(current) => {
                         if (!current) return false;
                         const cierre = fechasCierre?.[sucursalActiva];

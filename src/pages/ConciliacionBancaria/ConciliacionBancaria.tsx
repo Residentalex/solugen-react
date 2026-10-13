@@ -78,15 +78,7 @@ const ConciliacionBancaria: React.FC = () => {
       width: 160,
       render: (val: string) => <Text>{val || '-'}</Text>,
     },
-    {
-      title: 'Moneda',
-      dataIndex: 'monedaSimbolo',
-      key: 'moneda',
-      width: 100,
-      render: (val: string, record: ConciliacionRow) => (
-        <Text className="paces-text-secondary">{val || record.monedaCodigo || '-'}</Text>
-      ),
-    },
+
     {
       title: 'Fecha',
       dataIndex: 'fecha',

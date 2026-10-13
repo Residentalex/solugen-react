@@ -113,15 +113,7 @@ const Departamentos: React.FC = () => {
       width: 280,
       render: (val: string) => <Text strong>{toTitleCase(val ?? '')}</Text>,
     },
-    {
-      title: 'Activo',
-      dataIndex: 'activo',
-      key: 'activo',
-      width: 100,
-      render: (val: boolean) => (
-        <Switch checked={val} disabled checkedChildren="Sí" uncheckedChildren="No" />
-      ),
-    },
+
   ];
 
   return (

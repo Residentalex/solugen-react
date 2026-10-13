@@ -144,7 +144,7 @@ const Dashboard: React.FC = () => {
     : todasPantallas.slice(0, 6);
 
   const todayStr = useMemo(() => {
-    return new Date().toLocaleDateString('es-DO', { day: 'numeric', month: 'long', year: 'numeric' });
+    return new Date().toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
   }, []);
 
   const nombreCortoUsuario = useMemo(() => {

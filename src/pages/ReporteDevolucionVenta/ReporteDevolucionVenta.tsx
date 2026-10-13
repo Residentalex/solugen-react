@@ -199,7 +199,6 @@ const ReporteDevolucionVenta: React.FC = () => {
         <RangePicker
           value={fechas}
           onChange={setFechas as any}
-          format="YYYY-MM-DD"
           allowClear={false}
         />
         <Button

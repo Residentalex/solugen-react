@@ -75,7 +75,10 @@ export const facturaSuplidorApi = {
   },
 
   anular: async <T>(sucursal: number, transaccion: T): Promise<T> => {
-    const { data } = await apiClient.post<ApiResponse<T>>(`${BASE}/${sucursal}/anular`, transaccion);
+    // Endpoint propio de Factura Suplidor (RDE) que espera FacturaSuplidorDTO.
+    // No usar /Transaccion/{sucursal}/anular: ese endpoint espera TransaccionDTO y
+    // falla al convertir la propiedad "pagado" (System.Decimal).
+    const { data } = await apiClient.post<ApiResponse<T>>(`/RDE/${sucursal}/anular`, transaccion);
     return data.data;
   },
 

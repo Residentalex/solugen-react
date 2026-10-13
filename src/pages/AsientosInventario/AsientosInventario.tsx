@@ -348,7 +348,6 @@ const AsientosInventario: React.FC = () => {
                 onChange={(dates) => {
                   if (dates && dates[0] && dates[1]) setFechas([dates[0], dates[1]]);
                 }}
-                format="YYYY-MM-DD"
                 allowClear={false}
                 disabledDate={(current) => current && current.isAfter(dayjs(), 'day')}
                 style={{ width: '100%' }}

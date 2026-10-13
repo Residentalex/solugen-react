@@ -1244,7 +1244,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
           <Col xs={24} sm={12} lg={9}>
             <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
               <FloatingField label="Fecha Documento" required>
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                <DatePicker style={{ width: '100%' }}
                   disabledDate={(current) => {
                     if (!current) return false;
                     const cierre = fechasCierre?.[sucursalActiva];
@@ -1276,7 +1276,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
           <Col xs={24} sm={12} lg={9}>
             <Form.Item name="fechaRecibo" style={{ marginBottom: 0 }}>
               <FloatingField label="Fecha Recibo">
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                <DatePicker style={{ width: '100%' }}
                   disabledDate={(current) => {
                     if (!current) return false;
                     const cierre = fechasCierre?.[sucursalActiva];

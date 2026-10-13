@@ -301,7 +301,7 @@ const ActualizacionPrecioFormulario: React.FC = () => {
       <Row gutter={[16, 24]}>
         <Col xs={24} sm={12} lg={8}>
           <Form.Item name="fecha" label="Fecha" rules={[{ required: true, message: 'Requerido' }]}>
-            <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+            <DatePicker style={{ width: '100%' }}
               disabledDate={(current) => {
                 if (!current) return false;
                 const cierre = fechasCierre?.[sucursalActiva];
@@ -314,7 +314,7 @@ const ActualizacionPrecioFormulario: React.FC = () => {
         </Col>
         <Col xs={24} sm={12} lg={8}>
           <Form.Item name="fechaParaAplicar" label="Fecha para Aplicar" rules={[{ required: true, message: 'Requerido' }]}>
-            <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+            <DatePicker style={{ width: '100%' }}
               disabledDate={(current) => {
                 if (!current) return false;
                 const cierre = fechasCierre?.[sucursalActiva];

@@ -34,7 +34,7 @@ const CuentaBancariaFormulario: React.FC<Props> = ({ mode }) => {
   const [cuentaContable, setCuentaContable] = useState('');
   const [noCuenta, setNoCuenta] = useState('');
   const [bancos, setBancos] = useState<BancoDTO[]>([]);
-  const { monedas } = useMonedasCatalogo(sucursalActiva);
+  const { monedas } = useMonedasCatalogo();
 
   const cuentaContableWatcher = Form.useWatch('cuentaContable', form);
 

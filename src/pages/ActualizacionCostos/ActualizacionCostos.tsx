@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { Table,  Button, message, Card, Typography, DatePicker, InputNumber, Empty, Input, Alert } from 'antd';
 import { Select } from '../../components/Select';
 import type { ColumnsType } from 'antd/es/table';
-import { SaveOutlined, SearchOutlined, ReloadOutlined, DownloadOutlined } from '@ant-design/icons';
+import { SaveOutlined, SearchOutlined, FileExcelOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -258,6 +258,7 @@ const ActualizacionCostos: React.FC = () => {
       columnHeaders,
       dataRows,
       sheetName: 'Actualización Costos',
+      fileName: `ActualizacionCostos_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
       columnWidths: [
         { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 30 },
         { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 18 }, { wch: 12 },
@@ -405,7 +406,6 @@ const ActualizacionCostos: React.FC = () => {
           />
           <RangePicker
             style={{ width: 200 }}
-            format="YYYY-MM-DD"
             onChange={handleDateChange}
             placeholder={['Desde', 'Hasta']}
             disabledDate={(current) => !!fechaCierre && current <= fechaCierre.endOf('day')}
@@ -416,12 +416,8 @@ const ActualizacionCostos: React.FC = () => {
               Generar
             </Button>
           </PermissionGate>
-          {data.length > 0 && (
-            <PermissionGate accion="EXPORTAR">
-              <Button icon={<DownloadOutlined />} onClick={exportarExcel} disabled={bloqueado} />
-            </PermissionGate>
-          )}
           <div style={{ flex: 1 }} />
+          <Button icon={<FileExcelOutlined />} onClick={exportarExcel} disabled={data.length === 0 || bloqueado} />
           <Select
             style={{ width: 65 }}
             value={pageSize}

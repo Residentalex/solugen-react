@@ -109,7 +109,7 @@ const CuentasContables: React.FC = () => {
   // Options for selects in modal
   const [tipos, setTipos] = useState<TipoCuentaDTO[]>([]);
   const [grupos, setGrupos] = useState<GrupoCuentaContableDTO[]>([]);
-  const { monedas } = useMonedasCatalogo(sucursalActiva);
+  const { monedas } = useMonedasCatalogo();
 
   // Tree data and loading states
   const [treeData, setTreeData] = useState<TreeNodeData[]>([]);

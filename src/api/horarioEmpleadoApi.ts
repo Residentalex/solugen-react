@@ -9,7 +9,7 @@ export const horarioEmpleadoApi = {
     fechaFin?: string
   ): Promise<HorarioEmpleadoDTO[]> => {
     const params = new URLSearchParams();
-    if (sucursalFiltro !== undefined) params.append('sucursalFiltro', String(sucursalFiltro));
+    if (sucursalFiltro !== undefined && sucursalFiltro !== null) params.append('sucursalFiltro', String(sucursalFiltro));
     if (fechaInicio) params.append('fechaInicio', fechaInicio);
     if (fechaFin) params.append('fechaFin', fechaFin);
 

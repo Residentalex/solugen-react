@@ -84,7 +84,7 @@ const PantallaDetalle: React.FC = () => {
     return <LoadingSpinner mensaje="Cargando pantalla..." />;
   }
   if (loadingError && !data) {
-    return <ErrorDetalle mensaje="Error al cargar la pantalla" rutaVolver="/MPantalla" />;
+    return <ErrorDetalle mensaje="Error al cargar la pantalla" rutaVolver="/MPantalla" onRecargar={cargarPantalla} />;
   }
   if (!data) return null;
 

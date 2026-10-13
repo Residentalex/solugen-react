@@ -74,6 +74,7 @@ const pageTitles: Record<string, string> = {
   MUsuario: 'Usuarios',
   MEMP: 'Empleados',
   MROL: 'Roles',
+  MPosicion: 'Posiciones',
   MSucursal: 'Sucursales',
   MServidor: 'Servidores',
   MPermiso: 'Permisos',
@@ -174,7 +175,7 @@ const MainLayout: React.FC = () => {
   const location = useLocation();
   const isDetailPage = /^\/[A-Za-z]+\/\d+$/.test(location.pathname);
   const isFormPage = /^\/[A-Za-z]+\/(nuevo|\d+\/editar)$/.test(location.pathname);
-  const { data, loading, error, fetchInitialConfig, fetchMonedas } = useCompanyStore();
+  const { data, loading, error, fetchInitialConfig } = useCompanyStore();
   const sidebarCollapsed = useUIStore((s: any) => s.sidebarCollapsed);
   const setSidebarCollapsed = useUIStore((s: any) => s.setSidebarCollapsed);
   const activeModule = useUIStore((s: any) => s.activeModule);
@@ -210,15 +211,10 @@ const MainLayout: React.FC = () => {
     }
   }, [isAuthenticated, data.familias.length, fetchInitialConfig]);
 
-  // El catalogo MONEDAS es por sucursal: se descarga una vez por sucursal y queda cacheado
-  // en el store. Los formularios de documentos lo leen de ahi en vez de pedirlo en cada
-  // apertura. La moneda por defecto no se saca de este catalogo sino de
-  // `sucursales[].parametro.moneda` (PARAMETROS.CODMON), ver utils/moneda.ts.
-  useEffect(() => {
-    if (isAuthenticated && sucursalActiva !== null && sucursalActiva !== undefined) {
-      void fetchMonedas(sucursalActiva);
-    }
-  }, [isAuthenticated, sucursalActiva, fetchMonedas]);
+  // El catalogo MONEDAS es global: se descarga una sola vez al cargar la configuracion
+  // inicial (ver `fetchInitialConfig`) y queda en el store para todas las pantallas. La
+  // moneda por defecto no se saca de este catalogo sino de `sucursales[].parametro.moneda`
+  // (PARAMETROS.CODMON), ver utils/moneda.ts.
 
   useEffect(() => {
     if (error) message.error(error);

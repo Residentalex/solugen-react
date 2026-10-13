@@ -21,6 +21,8 @@ import { turnoApi } from '../../api/turnoApi';
 import type { CobroDTO } from '../../types/turno';
 import { formatCurrency, formatDate, formatDateTime, toTitleCase, formatNumber } from '../../utils/formats';
 import DetalleToolbar from '../../components/DetalleToolbar';
+import AsientosContableTable from '../../components/AsientosContableTable';
+import LogTable from '../../components/LogTable';
 import FiltroSeleccionDropdown from '../../components/FiltroSeleccionDropdown';
 import PermissionGate from '../../components/PermissionGate';
 import { CODIGO_PLANTILLA_TURNO_CIERRE } from '../../utils/ticketPlantilla';
@@ -1722,20 +1724,51 @@ const tabsItems = [
                style={{ marginBottom: 16 }}
              />
            )}
-           <Card className="paces-card" size="small" title={<span style={{ fontSize: 14, fontWeight: 600 }}>Detalle por Método de Pago</span>}>
-             <Table
-               dataSource={metodosPago}
-               columns={metodoPagoColumns}
-               rowKey="key"
-               size="small"
-               pagination={false}
-               locale={{ emptyText: 'Sin cobros registrados' }}
-             />
-           </Card>
-         </div>
-       ),
-     },
-   ];
+            <Card className="paces-card" size="small" title={<span style={{ fontSize: 14, fontWeight: 600 }}>Detalle por Método de Pago</span>}>
+              <Table
+                dataSource={metodosPago}
+                columns={metodoPagoColumns}
+                rowKey="key"
+                size="small"
+                pagination={false}
+                locale={{ emptyText: 'Sin cobros registrados' }}
+              />
+            </Card>
+          </div>
+        ),
+      },
+      ...(asientos.length > 0 ? [{
+        key: 'asientos',
+        label: `Asientos (${asientos.length})`,
+        children: <AsientosContableTable asientos={asientos} scroll={{ x: 800 }} />,
+      }] : []),
+      ...(logs.length > 0 ? [{
+        key: 'historial',
+        label: `Historial (${logs.length})`,
+        children: <LogTable dataSource={logs} scroll={{ x: 800 }} />,
+      }] : []),
+      {
+        key: 'desglose',
+        label: 'Desglose Monedas',
+        children: (
+          <div>
+            <Table
+              dataSource={desgloseData || []}
+              columns={[
+                { title: 'Valor', dataIndex: 'valor', key: 'valor', width: 120, align: 'right', render: (v: number) => formatNumber(v) },
+                { title: 'Cantidad', dataIndex: 'cantidad', key: 'cantidad', width: 120, align: 'right', render: (v: number) => formatNumber(v) },
+                { title: 'Monto', dataIndex: 'monto', key: 'monto', width: 160, align: 'right', render: (v: number) => formatCurrency(v) },
+              ]}
+              rowKey={(r: any) => `desglose-${r.valor}-${r.cantidad}`}
+              size="small"
+              pagination={{ pageSize: 20, showSizeChanger: false, showTotal: (t: number) => `${t} registros` }}
+              loading={cargandoDesglose}
+              locale={{ emptyText: 'Sin desglose de monedas' }}
+            />
+          </div>
+        ),
+      },
+    ];
 
   return (
     <div>

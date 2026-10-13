@@ -163,6 +163,7 @@ const SolicitudPagoFormulario: React.FC = () => {
 const isLarge = screens.xxl === true;
 
   // Moneda dinámica (siempre desde concepto)
+  const monedaCodigo = (selectedConcepto?.moneda as { codigo?: string } | undefined)?.codigo || getMonedaSucursalActiva().codigo;
   const monedaSimbolo = selectedConcepto?.moneda?.simbolo || getMonedaSucursalActiva().simbolo;
   const monedaNombre = selectedConcepto?.moneda?.nombre || getMonedaSucursalActiva().nombre;
 
@@ -466,10 +467,10 @@ nota: res.nota || '',
       retenciones: totalesDocs.retenciones,
       total: totalCalculado,
       tasa: tasaValue,
-      simboloMoneda: monedaSimbolo,
-      nombreMoneda: monedaNombre,
-      codigoMoneda: monedaCodigo,
-      nombreBeneficiario: values.nombreBeneficiario || '',
+        simboloMoneda: monedaSimbolo,
+        nombreMoneda: monedaNombre,
+        codigoMoneda: monedaCodigo,
+        nombreBeneficiario: values.nombreBeneficiario || '',
     };
 
     const dtoConAsociadas = {
@@ -515,7 +516,7 @@ nota: res.nota || '',
 
     // Moneda: SolicitudPagoDTO.moneda solo trae simbolo/nombre; codigo desde concepto o sucursal.
     const moneda = base.moneda || selectedConcepto?.moneda || getMonedaSucursalActiva();
-    const monedaCodigo = (moneda as { codigo?: string })?.codigo || getMonedaSucursalActiva().codigo;
+    const monedaCodigoLocal = (moneda as { codigo?: string })?.codigo || getMonedaSucursalActiva().codigo;
 
     return {
       id: base.id || 0,
@@ -542,7 +543,7 @@ nota: res.nota || '',
       codigoTipo: tipoValue || '',
       codigoEntidad: entidad.codigo || '',
       codigoConcepto: concepto.codigo || '',
-      codigoMoneda: monedaCodigo,
+      codigoMoneda: monedaCodigoLocal,
       nombreEntidad: entidad.nombre || base.nombreEntidad || '',
       nombreBeneficiario: values.nombreBeneficiario || '',
       transaccionesAsociadas: transaccionesAsociadas.map((t) => ({
@@ -916,7 +917,6 @@ subTotal: res.subTotal ?? 0,
                   <FloatingField label="Fecha" required>
                     <DatePicker
                       style={{ width: '100%' }}
-                      format="YYYY-MM-DD"
                       disabledDate={(current) => {
                         if (!current) return false;
                         if ((data as any)?.documento?.fechaPermitida === 'MenorIgualFechaDia') {

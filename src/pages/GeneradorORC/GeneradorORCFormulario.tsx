@@ -2000,7 +2000,6 @@ const GeneradorORCFormulario: React.FC = () => {
             <Form.Item name="fecha" rules={[{ required: true, message: 'Campo requerido' }]}>
               <FloatingField label="Fecha" required>
                 <DatePicker
-                  format="YYYY-MM-DD"
                   style={{ width: '100%' }}
                   disabledDate={(current) => {
                     if (!current) return false;

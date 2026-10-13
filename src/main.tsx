@@ -1,6 +1,7 @@
 import { StrictMode, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ConfigProvider, theme, App as AntApp } from 'antd'
+import esES from 'antd/locale/es_ES'
 import './index.css'
 import App from './App'
 import { useUIStore } from './stores/uiStore'
@@ -134,7 +135,7 @@ function AppWrapper() {
   }, [themeName]);
 
   return (
-    <ConfigProvider theme={getThemeConfig(themeName)}>
+    <ConfigProvider theme={getThemeConfig(themeName)} locale={esES}>
       <AntApp>
         <App />
       </AntApp>

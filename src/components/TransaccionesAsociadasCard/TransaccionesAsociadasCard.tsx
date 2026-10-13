@@ -123,6 +123,14 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
       render: (v: number) => formatNumber(v ?? 0),
     },
     {
+      title: 'Pendiente',
+      key: 'pendiente',
+      width: 120,
+      align: 'right' as const,
+      render: (_: any, record: DocumentoAsociadoItem) =>
+        formatNumber(Math.max(0, (record.montoOriginal ?? 0) - (record.pagado ?? 0) - (record.descuento ?? 0))),
+    },
+    {
       title: 'Monto',
       dataIndex: 'monto',
       key: 'monto',
@@ -172,11 +180,12 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
               acc.montoOriginal += d.montoOriginal || 0;
               acc.pagado += d.pagado || 0;
               acc.descuento += d.descuento || 0;
+              acc.pendiente += Math.max(0, (d.montoOriginal || 0) - (d.pagado || 0) - (d.descuento || 0));
               acc.monto += d.monto || 0;
               acc.perdida += d.perdida || 0;
               return acc;
             },
-            { montoOriginal: 0, pagado: 0, descuento: 0, monto: 0, perdida: 0 }
+            { montoOriginal: 0, pagado: 0, descuento: 0, pendiente: 0, monto: 0, perdida: 0 }
           );
 
           return (
@@ -196,10 +205,13 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
                 <Text strong>{formatNumber(totales.descuento)}</Text>
               </Table.Summary.Cell>
               <Table.Summary.Cell index={6} align="right">
+                <Text strong>{formatNumber(totales.pendiente)}</Text>
+              </Table.Summary.Cell>
+              <Table.Summary.Cell index={7} align="right">
                 <Text strong>{formatNumber(totales.monto)}</Text>
               </Table.Summary.Cell>
               {!ocultarPerdida && (
-                <Table.Summary.Cell index={7} align="right">
+                <Table.Summary.Cell index={8} align="right">
                   <Text strong>{formatNumber(totales.perdida)}</Text>
                 </Table.Summary.Cell>
               )}

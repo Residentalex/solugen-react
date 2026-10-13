@@ -193,6 +193,12 @@ const FacturaClienteFormulario: React.FC = () => {
           .then((res: any) => setClientesCache(Array.isArray(res) ? res : []))
           .catch(() => {});
       }
+      // Actualizar título con documento en modo editar
+      if (mode === 'editar') {
+        const docCodigo = (enc as any).documento?.codigo || 'FAC';
+        const docNum = (enc as any).noDocumento || '';
+        setPageTitleOverride(`Editar Factura de Cliente ${docCodigo}-${docNum} - Cliente`);
+      }
     },
   });
 
@@ -1215,7 +1221,7 @@ const FacturaClienteFormulario: React.FC = () => {
               <Col xs={24} sm={12} lg={9}>
                 <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
                   <FloatingField label="Fecha Documento" required>
-                    <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                    <DatePicker style={{ width: '100%' }}
                       disabledDate={(current) => {
                         if (!current) return false;
                         const cierre = fechasCierre?.[sucursalActiva];

@@ -1185,7 +1185,7 @@ const DevolucionVentaFormulario: React.FC = () => {
           <Col xs={24} sm={12} lg={9}>
             <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
               <FloatingField label="Fecha Documento" required>
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                <DatePicker style={{ width: '100%' }}
                   disabled={desdePV}
                   disabledDate={(current) => {
                     if (!current) return false;
@@ -1229,7 +1229,6 @@ const DevolucionVentaFormulario: React.FC = () => {
               <FloatingField label="Fecha Factura">
                 <DatePicker
                   style={{ width: '100%' }}
-                  format="YYYY-MM-DD"
                   disabled
                   value={selectedFactura?.fechaDocumento ? dayjs(selectedFactura.fechaDocumento) : null}
                 />

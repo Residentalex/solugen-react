@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Table, Input, Tag, Button, Card, Typography, DatePicker, Alert, Empty } from 'antd';
@@ -314,7 +314,6 @@ const ActualizacionPrecio: React.FC = () => {
             />
             <RangePicker
               style={{ width: '100%', maxWidth: 220, flex: '0 0 auto' }}
-              format="YYYY-MM-DD"
               onChange={handleDateChange}
               placeholder={["Desde", "Hasta"]}
             />

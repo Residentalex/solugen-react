@@ -1029,7 +1029,7 @@ const ImportarInventario: React.FC = () => {
           {/* Fila 2: Fecha */}
           <Col xs={24} sm={12} lg={8}>
             <Form.Item name="fechaDocumento" label="Fecha" required style={{ marginBottom: 0 }}>
-              <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+              <DatePicker style={{ width: '100%' }}
                 disabledDate={(current) => {
                   if (!current) return false;
                   const cierre = fechasCierre?.[sucursalActiva];

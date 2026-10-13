@@ -155,4 +155,5 @@ export interface ApiResponse<T> {
   data: T;
   errorMessage: string;
   total?: number;
+  warning?: string;
 }

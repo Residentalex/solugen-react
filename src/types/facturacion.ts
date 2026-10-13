@@ -68,7 +68,9 @@ export interface ClienteDTO {
   porcientoDescuento: number;
 
   // De ClienteDTO extra - nuevos campos
-  tipoNcf?: TipoComprobanteNCFDTO;
+  tipoNCF?: TipoComprobanteNCFDTO;
+  empresa?: boolean;
+  facturaDocumentosVencidos?: boolean;
   codigoVendedor?: string;
   vendedorNombre?: string;
   codigoListaPrecio?: string;

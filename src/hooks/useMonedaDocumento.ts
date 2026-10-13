@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import type { FormInstance } from 'antd';
 import { useCompanyStore } from '../stores/companyStore';
 import { getMonedaSucursalActiva } from '../utils/moneda';
@@ -14,10 +14,10 @@ type DocumentoConMoneda = { moneda?: MonedaDTO | null; tasa?: number };
  * formulario guarda el objeto completo del catalogo en `documento.moneda` y no solo el texto.
  * El campo del form es un espejo: `form.moneda` guarda el codigo seleccionado.
  *
- * El catalogo se lee del store de companyStore, que lo descarga una vez por sucursal al
- * iniciar sesion (ver `MainLayout` y `companyStore.fetchMonedas`). El `fetchMonedas` de
- * aqui es solo una red de seguridad para cuando el formulario se monta antes de que
- * termine la carga inicial.
+ * El catalogo MONEDAS es global y se descarga una sola vez al iniciar sesion dentro de la
+ * configuracion inicial (ver `MainLayout` y `companyStore.fetchInitialConfig`). El parametro
+ * `sucursal` se conserva por compatibilidad de firma con los formularios que ya lo pasan,
+ * pero el catalogo ya no depende de la sucursal activa.
  *
  * `monedaDelConcepto` es solo de lectura: mientras el documento no existe todavia
  * (modo crear) el selector refleja la moneda del concepto, y si tampoco hay concepto
@@ -30,18 +30,9 @@ export function useMonedaDocumento<T extends DocumentoConMoneda>(
   setDocumento: (updater: (prev: T | null) => T | null) => void,
   monedaDelConcepto?: MonedaDTO | null,
 ) {
-  const monedas = useCompanyStore((s) => (sucursal == null ? undefined : s.data.monedas[sucursal]));
-  const monedasCargando = useCompanyStore((s) => (sucursal == null ? false : s.monedasCargando.includes(sucursal)));
-  const fetchMonedas = useCompanyStore((s) => s.fetchMonedas);
-  const loading = !!monedasCargando;
-
-  useEffect(() => {
-    // OJO: Sucursal.OrensePlaza es 0, hay que comparar por null/undefined y no por
-    // falsy o el catalogo nunca se carga en esa sucursal.
-    if (sucursal === null || sucursal === undefined) return;
-    if (monedas && monedas.length) return;
-    void fetchMonedas(sucursal);
-  }, [sucursal, monedas, fetchMonedas]);
+  void sucursal;
+  const monedas = useCompanyStore((s) => s.data.monedas);
+  const loading = useCompanyStore((s) => s.monedasCargando);
 
   const lista = useMemo<MonedaDTO[]>(() => monedas ?? [], [monedas]);
 
@@ -71,7 +62,7 @@ export function useMonedaDocumento<T extends DocumentoConMoneda>(
   /**
    * Ant Design muestra el valor crudo cuando el `value` no existe en `options`, por eso
    * el valor por defecto tiene que estar siempre en la lista. Si el codigo de la moneda
-   * de la compania no viene en el catalogo de la sucursal se agrega con el nombre del
+   * de la compania no viene en el catalogo se agrega con el nombre del
    * store, para que el campo muestre "PESOS DOMINICANOS" y no "DOP".
    */
   const opciones = useMemo<MonedaDTO[]>(() => {

@@ -255,6 +255,128 @@ function formatTime(val: string | undefined | null): string {
   }
 }
 
+// ===== Formato de fecha segun patron (.NET) =====
+
+/** Componentes de fecha/hora ya interpretados (independientes de zona horaria). */
+export interface FechaTicketComponentes {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+}
+
+/** Construye componentes validando rangos; devuelve null si la fecha es invalida. */
+function componentesFecha(y: number, mo: number, d: number, h: number, mi: number, s: number): FechaTicketComponentes | null {
+  if (mo < 1 || mo > 12 || d < 1 || d > 31 || h < 0 || h > 23 || mi < 0 || mi > 59 || s < 0 || s > 59) return null;
+  const fecha = new Date(Date.UTC(y, mo - 1, d, h, mi, s));
+  if (fecha.getUTCFullYear() !== y || fecha.getUTCMonth() !== mo - 1 || fecha.getUTCDate() !== d) return null;
+  return { year: y, month: mo, day: d, hour: h, minute: mi, second: s };
+}
+
+/**
+ * Interpreta una fecha/hora de ticket sin depender del locale ni de la zona
+ * horaria del runtime. Acepta ISO (con o sin hora), compacto
+ * (yyyyMMdd[HHmmss]) y dd/MM/yyyy o MM/dd/yyyy (con hora opcional).
+ * El contrato del ECR es dd/MM/yyyy; en caso ambiguo se asume dia primero.
+ * Devuelve null si no puede interpretarla.
+ */
+export function parsearFechaTicket(valor?: string | null): FechaTicketComponentes | null {
+  if (valor === undefined || valor === null) return null;
+  const texto = String(valor).trim();
+  if (!texto) return null;
+
+  let m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/.exec(texto);
+  if (m) return componentesFecha(+m[1], +m[2], +m[3], +m[4], +m[5], m[6] ? +m[6] : 0);
+
+  m = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(texto);
+  if (m) return componentesFecha(+m[1], +m[2], +m[3], 0, 0, 0);
+
+  m = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(texto);
+  if (m) return componentesFecha(+m[1], +m[2], +m[3], +m[4], +m[5], +m[6]);
+
+  m = /^(\d{4})(\d{2})(\d{2})$/.exec(texto);
+  if (m) return componentesFecha(+m[1], +m[2], +m[3], 0, 0, 0);
+
+  m = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(texto);
+  if (m) {
+    const a = +m[1];
+    const b = +m[2];
+    const anio = +m[3];
+    let dia: number;
+    let mes: number;
+    if (a > 12 && b <= 12) { dia = a; mes = b; }
+    else if (b > 12 && a <= 12) { dia = b; mes = a; }
+    else { dia = a; mes = b; }
+    return componentesFecha(anio, mes, dia, m[4] ? +m[4] : 0, m[5] ? +m[5] : 0, m[6] ? +m[6] : 0);
+  }
+
+  const d = new Date(texto);
+  if (!isNaN(d.getTime())) {
+    return componentesFecha(d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds());
+  }
+  return null;
+}
+
+/** Aplica un patron de formato .NET (yyyy, MM, dd, HH, mm, ss, tt) a los componentes. */
+function aplicarPatronFecha(c: FechaTicketComponentes, patron: string): string {
+  const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const mesesAbrev = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+  const diasSemanaAbrev = ['dom', 'lun', 'mar', 'mie', 'jue', 'vie', 'sab'];
+  const diaSemana = new Date(Date.UTC(c.year, c.month - 1, c.day)).getUTCDay();
+  const es = (n: number, len: number) => String(n).padStart(len, '0');
+  const pm = c.hour >= 12;
+  const hora12 = (c.hour % 12) || 12;
+
+  let salida = '';
+  let i = 0;
+  while (i < patron.length) {
+    const ch = patron[i];
+    if (/[a-zA-Z]/.test(ch)) {
+      let j = i;
+      while (j < patron.length && patron[j] === ch) j++;
+      const len = j - i;
+      switch (ch) {
+        case 'y': salida += len > 2 ? es(c.year, 4) : es(c.year % 100, 2); break;
+        case 'M':
+          salida += len >= 4 ? meses[c.month - 1]
+            : len === 3 ? mesesAbrev[c.month - 1]
+            : es(c.month, len >= 2 ? 2 : 1); break;
+        case 'd':
+          salida += len >= 4 ? diasSemana[diaSemana]
+            : len === 3 ? diasSemanaAbrev[diaSemana]
+            : es(c.day, len >= 2 ? 2 : 1); break;
+        case 'H': salida += es(c.hour, len >= 2 ? 2 : 1); break;
+        case 'h': salida += es(hora12, len >= 2 ? 2 : 1); break;
+        case 'm': salida += es(c.minute, len >= 2 ? 2 : 1); break;
+        case 's': salida += es(c.second, len >= 2 ? 2 : 1); break;
+        case 't': salida += len >= 2 ? (pm ? 'PM' : 'AM') : (pm ? 'P' : 'A'); break;
+        default: salida += patron.slice(i, j); break; // letra desconocida: literal
+      }
+      i = j;
+      continue;
+    }
+    salida += ch;
+    i++;
+  }
+  return salida;
+}
+
+/**
+ * Formatea un valor de fecha usando un patron de formato .NET (el mismo que usa
+ * el agente C# y el editor de plantillas). Si no hay patron o no se puede
+ * interpretar el valor, devuelve el texto crudo.
+ */
+export function formatearPatronFecha(valor: string | undefined | null, patron?: string): string {
+  const crudo = valor === undefined || valor === null ? '' : String(valor);
+  if (!patron || !patron.trim()) return crudo;
+  const comp = parsearFechaTicket(crudo);
+  if (!comp) return crudo;
+  return aplicarPatronFecha(comp, patron);
+}
+
 // ===== Resolucion de labels editables y campos DTO =====
 
 /**
@@ -1914,15 +2036,9 @@ function renderCampoFPV(
     if (valor === '') return '';
     switch (tipo) {
       case 'fecha': {
+        if (fmt2) return formatearPatronFecha(String(valor), fmt2);
         const d = new Date(valor);
-        if (!isNaN(d.getTime())) {
-          if (fmt2) {
-            try {
-              return d.toLocaleDateString('es-DO', { year: 'numeric', month: '2-digit', day: '2-digit' });
-            } catch { return formatDate(String(valor)); }
-          }
-          return formatDate(String(valor));
-        }
+        if (!isNaN(d.getTime())) return formatDate(String(valor));
         return String(valor);
       }
       case 'numero': {
@@ -2131,6 +2247,7 @@ function renderCampoEsquema(
     if (valor === '') return '';
     switch (tipoDato) {
       case 'fecha': {
+        if (formato) return formatearPatronFecha(String(valor), formato);
         const d = new Date(valor);
         if (!isNaN(d.getTime())) return formatDate(String(valor));
         return String(valor);
@@ -2874,6 +2991,7 @@ function renderCampoVSNT(
   sepEtiqueta: string = SEPARADOR_ETIQUETA,
   valor?: OpcionesValorLinea,
   tipoDato?: 'texto' | 'fecha' | 'numero' | 'dinero',
+  formatoDato?: string,
 ): string | null {
   const w = width ?? 42;
   const fmt = fmtOv;
@@ -2891,7 +3009,7 @@ function renderCampoVSNT(
       case 'SLOGAN': return data.SLOGAN || '';
       case 'ID_COMERCIO': return data.merchantId || '000000167391001';
       case 'TIPO_OP': return data.subsidioLabel || 'VENTA';
-      case 'FECHA': return formatFechaHoraCorta(data.transactionDate);
+      case 'FECHA': return formatoDato ? formatearPatronFecha(data.transactionDate, formatoDato) : formatFechaHoraCorta(data.transactionDate);
       case 'ISSUER': return data.issuerName || '';
       case 'TRANS': return data.tokenECR || '';
       case 'AUTORIZACION': return data.autorizacion || '';
@@ -3028,7 +3146,7 @@ function formatoVoucherZonas(data: any, company: CompanyInfo | undefined, cfg: P
     }
     if (linea.ref.startsWith('CAMPO:')) {
       const clave = linea.ref.slice(6);
-      const render = renderCampoVSNT(clave, data, linea.label, linea.formato, width, linea.mostrarLabel, linea.formatoLabel || linea.formato, linea.formatoValor, sepEtiqueta, linea, linea.tipoDato);
+      const render = renderCampoVSNT(clave, data, linea.label, linea.formato, width, linea.mostrarLabel, linea.formatoLabel || linea.formato, linea.formatoValor, sepEtiqueta, linea, linea.tipoDato, linea.formatoDato);
       if (render) ctx.p.push(render);
       _restaurarFmt(ctx, linea.formato);
       return;

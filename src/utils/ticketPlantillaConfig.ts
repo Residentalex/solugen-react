@@ -521,6 +521,7 @@ export const CAMPOS_DTO_DISPONIBLES: Record<'FPV' | 'FRI' | 'VSNT', CampoDTODisp
   VSNT: [
     { id: 'merchantId', label: 'ID comercio', ruta: 'merchantId', tipo: 'texto' },
     { id: 'transactionDate', label: 'Fecha transaccion', ruta: 'transactionDate', tipo: 'fecha' },
+    { id: 'transactionTime', label: 'Hora transacción', ruta: 'transactionTime', tipo: 'texto' },
     { id: 'issuerName', label: 'Banco emisor', ruta: 'issuerName', tipo: 'texto' },
     { id: 'tokenECR', label: 'Trans #', ruta: 'tokenECR', tipo: 'texto' },
     { id: 'autorizacion', label: 'Autorizacion', ruta: 'autorizacion', tipo: 'texto' },
@@ -530,7 +531,7 @@ export const CAMPOS_DTO_DISPONIBLES: Record<'FPV' | 'FRI' | 'VSNT', CampoDTODisp
     { id: 'rrn', label: 'RRN', ruta: 'rrn', tipo: 'texto' },
     { id: 'batchNumber', label: 'Lote', ruta: 'batchNumber', tipo: 'texto' },
     { id: 'terminalId', label: 'Terminal', ruta: 'terminalId', tipo: 'texto' },
-    { id: 'processingHost', label: 'Host', ruta: 'processingHost', tipo: 'texto' },
+    { id: 'acquirerName', label: 'Host', ruta: 'acquirerName', tipo: 'texto' },
     { id: 'stan', label: 'STAN', ruta: 'stan', tipo: 'texto' },
     { id: 'entryMode', label: 'Entry mode', ruta: 'entryMode', tipo: 'texto' },
     { id: 'exchangeRate', label: 'Tasa', ruta: 'exchangeRate', tipo: 'numero' },

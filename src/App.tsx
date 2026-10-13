@@ -117,8 +117,13 @@ const CategoriaArticuloDetalle = React.lazy(() => import('./pages/CategoriasArti
 const FamiliasArticulo = React.lazy(() => import('./pages/FamiliasArticulo/FamiliasArticulo'));
 const Marcas = React.lazy(() => import('./pages/Marca/Marcas'));
 const MarcaFormulario = React.lazy(() => import('./pages/Marca/MarcaFormulario'));
+const Sucursales = React.lazy(() => import('./pages/Sucursales/Sucursales'));
+const SucursalFormulario = React.lazy(() => import('./pages/Sucursales/SucursalFormulario'));
 const Departamentos = React.lazy(() => import('./pages/Departamentos/Departamentos'));
 const DepartamentoFormulario = React.lazy(() => import('./pages/Departamentos/DepartamentoFormulario'));
+const Horarios = React.lazy(() => import('./pages/HorarioEmpleado/HorarioEmpleado'));
+const Posiciones = React.lazy(() => import('./pages/Posiciones/Posiciones'));
+const PosicionFormulario = React.lazy(() => import('./pages/Posiciones/PosicionFormulario'));
 const SolicitudPago = React.lazy(() => import('./pages/SolicitudPago/SolicitudPago'));
 const SolicitudPagoDetalle = React.lazy(() => import('./pages/SolicitudPago/SolicitudPagoDetalle'));
 const SolicitudPagoFormulario = React.lazy(() => import('./pages/SolicitudPago/SolicitudPagoFormulario'));
@@ -454,9 +459,13 @@ const App: React.FC = () => {
             <Route path="MMarca" element={<Marcas />} />
             <Route path="MMarca/nuevo" element={<MarcaFormulario />} />
             <Route path="MMarca/:codigo/editar" element={<MarcaFormulario />} />
-            <Route path="MDepto" element={<Departamentos />} />
+<Route path="MDepto" element={<Departamentos />} />
             <Route path="MDepto/nuevo" element={<DepartamentoFormulario />} />
             <Route path="MDepto/:codigo/editar" element={<DepartamentoFormulario />} />
+            <Route path="MHorario" element={<Horarios />} />
+            <Route path="MPosicion" element={<Posiciones />} />
+            <Route path="MPosicion/nuevo" element={<PosicionFormulario />} />
+            <Route path="MPosicion/:codigo/editar" element={<PosicionFormulario />} />
             <Route path="MAtributo" element={<Proximamente modulo="Atributos" codigo="MAtributo" />} />
             <Route path="MPaquete" element={<Proximamente modulo="Paquetes" codigo="MPaquete" />} />
             <Route path="RCIERREFISCAL" element={<CierreFiscal />} />
@@ -517,7 +526,9 @@ const App: React.FC = () => {
           <Route path="notificaciones/personalizadas" element={<NotificacionesPersonalizadas />} />
           <Route path="visualizar-consulta/:configID" element={<VisualizarConsulta />} />
           <Route path="MTicket" element={<Tickets />} />
-          <Route path="MSucursal" element={<Proximamente modulo="Sucursales" codigo="MSucursal" />} />
+          <Route path="MSucursal" element={<Sucursales />} />
+          <Route path="MSucursal/nuevo" element={<SucursalFormulario />} />
+          <Route path="MSucursal/:codigo/editar" element={<SucursalFormulario />} />
             <Route path="mplantillasup" element={<PlantillaSuplidor />} />
             <Route path="mplantillasup/nuevo" element={<PlantillaSuplidorFormulario />} />
             <Route path="mplantillasup/:id/editar" element={<PlantillaSuplidorFormulario />} />
@@ -725,9 +736,12 @@ const App: React.FC = () => {
             <Route path="MMarca" element={<Marcas />} />
             <Route path="MMarca/nuevo" element={<MarcaFormulario />} />
             <Route path="MMarca/:codigo/editar" element={<MarcaFormulario />} />
-            <Route path="MDepto" element={<Departamentos />} />
+<Route path="MDepto" element={<Departamentos />} />
             <Route path="MDepto/nuevo" element={<DepartamentoFormulario />} />
             <Route path="MDepto/:codigo/editar" element={<DepartamentoFormulario />} />
+            <Route path="MPosicion" element={<Posiciones />} />
+            <Route path="MPosicion/nuevo" element={<PosicionFormulario />} />
+            <Route path="MPosicion/:codigo/editar" element={<PosicionFormulario />} />
             <Route path="MAtributo" element={<Proximamente modulo="Atributos" codigo="MAtributo" />} />
             <Route path="MPaquete" element={<Proximamente modulo="Paquetes" codigo="MPaquete" />} />
             <Route path="RCIERREFISCAL" element={<CierreFiscal />} />
@@ -787,7 +801,9 @@ const App: React.FC = () => {
           <Route path="notificaciones/personalizadas" element={<NotificacionesPersonalizadas />} />
           <Route path="visualizar-consulta/:configID" element={<VisualizarConsulta />} />
           <Route path="MTicket" element={<Tickets />} />
-          <Route path="MSucursal" element={<Proximamente modulo="Sucursales" codigo="MSucursal" />} />
+          <Route path="MSucursal" element={<Sucursales />} />
+          <Route path="MSucursal/nuevo" element={<SucursalFormulario />} />
+          <Route path="MSucursal/:codigo/editar" element={<SucursalFormulario />} />
             <Route path="mplantillasup" element={<PlantillaSuplidor />} />
             <Route path="mplantillasup/nuevo" element={<PlantillaSuplidorFormulario />} />
             <Route path="mplantillasup/:id/editar" element={<PlantillaSuplidorFormulario />} />
@@ -838,4 +854,7 @@ const App: React.FC = () => {
 };
 
 export default App;
+
+
+
 

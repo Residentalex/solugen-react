@@ -1071,7 +1071,25 @@ const FacturaPOSDetalle: React.FC = () => {
                         { title: 'NCF', dataIndex: 'ncf', key: 'ncf', width: 150,
                           render: (v: string) => v || '-',
                         },
+                        { title: 'Monto', dataIndex: 'monto', key: 'monto', width: 120, align: 'right' as const,
+                          render: (v: number) => <Text strong>{formatNumber(v || 0)}</Text>,
+                        },
                       ]}
+                      summary={() => {
+                        const totalMonto = (devolucionesPV || []).reduce((sum: number, r: any) => sum + (Number(r.monto) || 0), 0);
+                        return (
+                          <Table.Summary fixed="bottom">
+                            <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+                              <Table.Summary.Cell index={0} colSpan={3}>
+                                <Text strong style={{ paddingLeft: 8 }}>Total</Text>
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={3} align="right">
+                                <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(totalMonto)}</Text>
+                              </Table.Summary.Cell>
+                            </Table.Summary.Row>
+                          </Table.Summary>
+                        );
+                      }}
                     />
                   ),
                 }] : []),
@@ -1093,7 +1111,14 @@ const FacturaPOSDetalle: React.FC = () => {
           <Col xxl={6}>
             <EntidadCard entidad={data.cliente} entidadSecundaria={data.entidad} fallbackTitulo="Cliente" />
             <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={false}
-              adorno={<AdornoDocumentoPagado total={data.total} saldoPendiente={saldoPendiente} />}
+                adorno={
+                  <AdornoDocumentoPagado
+                    total={data.total}
+                    saldoPendiente={saldoPendiente}
+                    documentosRelacionados={documentosRelacionados}
+                    idDocumento={data.id}
+                  />
+                }
               monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
               monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
               tasa={data.tasa ?? 1}
@@ -1341,7 +1366,25 @@ const FacturaPOSDetalle: React.FC = () => {
                       { title: 'NCF', dataIndex: 'ncf', key: 'ncf', width: 150,
                         render: (v: string) => v || '-',
                       },
+                      { title: 'Monto', dataIndex: 'monto', key: 'monto', width: 120, align: 'right' as const,
+                        render: (v: number) => <Text strong>{formatNumber(v || 0)}</Text>,
+                      },
                     ]}
+                    summary={() => {
+                      const totalMonto = (devolucionesPV || []).reduce((sum: number, r: any) => sum + (Number(r.monto) || 0), 0);
+                      return (
+                        <Table.Summary fixed="bottom">
+                          <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+                            <Table.Summary.Cell index={0} colSpan={3}>
+                              <Text strong style={{ paddingLeft: 8 }}>Total</Text>
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={3} align="right">
+                              <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(totalMonto)}</Text>
+                            </Table.Summary.Cell>
+                          </Table.Summary.Row>
+                        </Table.Summary>
+                      );
+                    }}
                   />
                 ),
               }] : []),
@@ -1361,7 +1404,14 @@ const FacturaPOSDetalle: React.FC = () => {
 
           <div style={{ marginTop: 24 }}>
             <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={true}
-            adorno={<AdornoDocumentoPagado total={data.total} saldoPendiente={saldoPendiente} />}
+                adorno={
+                  <AdornoDocumentoPagado
+                    total={data.total}
+                    saldoPendiente={saldoPendiente}
+                    documentosRelacionados={documentosRelacionados}
+                    idDocumento={data.id}
+                  />
+                }
               monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
               monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
               tasa={data.tasa ?? 1}

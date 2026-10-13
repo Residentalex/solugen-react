@@ -1027,7 +1027,6 @@ const SalidaAlmacenDetalle: React.FC = () => {
             </div>
             <DatePicker
               style={{ width: 160 }}
-              format="YYYY-MM-DD"
               value={vencimientoFechas[p.id] || null}
               onChange={(date) => {
                 setVencimientoFechas((prev) => ({

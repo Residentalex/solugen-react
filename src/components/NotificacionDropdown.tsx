@@ -30,7 +30,7 @@ function formatFechaRelativa(iso?: string): string {
   if (diffHoras < 24) return `Hace ${diffHoras} h`;
   const diffDias = Math.floor(diffHoras / 24);
   if (diffDias < 7) return `Hace ${diffDias} d`;
-  return new Date(iso).toLocaleDateString('es-DO', { day: '2-digit', month: 'short' });
+  return new Date(iso).toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 function truncar(texto: string, max: number): string {
@@ -280,7 +280,7 @@ const NotificacionDropdown: React.FC = () => {
                 <Tag color={TIPO_CONFIG[verNotificacion.tipo]?.color || '#556ee6'}>{verNotificacion.tipo || 'Info'}</Tag>
               </Descriptions.Item>
               <Descriptions.Item label="Fecha">
-                {verNotificacion.fechaCreacion ? new Date(verNotificacion.fechaCreacion).toLocaleDateString('es-DO', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
+                {verNotificacion.fechaCreacion ? new Date(verNotificacion.fechaCreacion).toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
               </Descriptions.Item>
               <Descriptions.Item label="Estado">
                 <Tag color={verNotificacion.leida ? 'default' : 'blue'}>{verNotificacion.leida ? 'Leída' : 'No leída'}</Tag>

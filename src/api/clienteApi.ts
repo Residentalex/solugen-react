@@ -62,8 +62,8 @@ export const clienteApi = {
     return data.data;
   },
 
-  actualizar: async (sucursal: number, cliente: ClienteDTO): Promise<ClienteDTO> => {
+  actualizar: async (sucursal: number, cliente: ClienteDTO): Promise<{ cliente: ClienteDTO; warning?: string }> => {
     const { data } = await apiClient.put<ApiResponse<ClienteDTO>>(`${BASE}/${sucursal}`, cliente);
-    return data.data;
+    return { cliente: data.data, warning: data.warning };
   },
 };

@@ -258,7 +258,7 @@ const ActivoFormulario: React.FC = () => {
                 label="Fecha Adquisición"
                 rules={[{ required: true, message: 'La fecha de adquisición es obligatoria' }]}
               >
-                <DatePicker format="YYYY-MM-DD" style={{ width: '100%' }} />
+                <DatePicker style={{ width: '100%' }} />
               </Form.Item>
             </Col>
             <Col xs={24} sm={12} lg={8}>

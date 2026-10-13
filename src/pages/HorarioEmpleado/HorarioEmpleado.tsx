@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Typography, message,  DatePicker } from 'antd';
 import { Select } from '../../components/Select';
 import dayjs from 'dayjs';
@@ -10,7 +10,7 @@ import { horarioEmpleadoApi } from '../../api/horarioEmpleadoApi';
 import type { HorarioEmpleadoDTO } from '../../types/horarioEmpleado';
 import { Sucursal } from '../../types/auth';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
-import { formatDate, extraerMensajeError } from '../../utils/formats';
+import { formatDate, extraerMensajeError, toTitleCase } from '../../utils/formats';
 
 const { Text } = Typography;
 
@@ -21,7 +21,7 @@ const HorarioEmpleado: React.FC = () => {
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const sucursalesData = useCompanyStore((s) => s.data.sucursales);
-  const opcionesSucursales = (sucursalesData || []).map((s: any) => ({
+  const opcionesSucursales = (sucursalesData || []).map((s) => ({
     value: s.sucursal,
     label: s.nombre,
   }));
@@ -30,6 +30,7 @@ const HorarioEmpleado: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [loadingError, setLoadingError] = useState(false);
   const [selectedRow, setSelectedRow] = useState<HorarioEmpleadoDTO | null>(null);
+  const [searchText, setSearchText] = useState('');
   const [page, setPage] = useState(1);
   const [sucursalFiltro, setSucursalFiltro] = useState<Sucursal>(sucursal);
   const [fechaInicio, setFechaInicio] = useState(dayjs());
@@ -97,7 +98,27 @@ const HorarioEmpleado: React.FC = () => {
     setPage(pagina);
   }, []);
 
-  const total = data.length;
+  const handleSearch = useCallback((value: string) => {
+    setSearchText(value);
+    setPage(1);
+  }, []);
+
+  const datosFiltrados = useMemo(() => {
+    if (!searchText) return data;
+    const q = searchText.toLowerCase();
+    return data.filter((d) =>
+      (d.codigoEmpleado || '').toLowerCase().includes(q)
+      || (d.empleado || '').toLowerCase().includes(q)
+      || (d.sucursal || '').toLowerCase().includes(q)
+    );
+  }, [data, searchText]);
+
+  const total = datosFiltrados.length;
+
+  const datosPaginados = useMemo(
+    () => datosFiltrados.slice((page - 1) * FILAS_POR_PAGINA, page * FILAS_POR_PAGINA),
+    [datosFiltrados, page]
+  );
 
   const columns: ColumnsType<HorarioEmpleadoDTO> = [
     {
@@ -130,7 +151,7 @@ const HorarioEmpleado: React.FC = () => {
       key: 'empleado',
       width: 280,
       render: (nombre: string) => (
-        <Text strong>{nombre}</Text>
+        <Text strong>{toTitleCase(nombre || '')}</Text>
       ),
     },
     {
@@ -147,7 +168,7 @@ const HorarioEmpleado: React.FC = () => {
   return (
     <DocumentListadoLayout<HorarioEmpleadoDTO>
       columns={columns}
-      data={data}
+      data={datosPaginados}
       rowKey="id"
       loading={loading}
       total={total}
@@ -162,7 +183,7 @@ const HorarioEmpleado: React.FC = () => {
       onPageChange={handlePageChange}
       toolbarProps={{
         searchPlaceholder: 'Buscar empleado...',
-        onSearch: () => {},
+        onSearch: handleSearch,
         pageSize: FILAS_POR_PAGINA,
         onPageSizeChange: () => {},
         onRefresh: handleRefresh,

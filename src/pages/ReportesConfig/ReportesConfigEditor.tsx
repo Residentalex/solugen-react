@@ -313,6 +313,18 @@ function extraerRutasEsquema(esquema: unknown, prefijo = ''): string[] {
   return rutas;
 }
 
+function extraerRutasElementoArray(esquema: unknown, rutaArray: string): string[] {
+  const valor = resolverRuta(esquema, rutaArray);
+  if (!Array.isArray(valor)) return [];
+
+  const rutas = valor.flatMap((item) =>
+    item !== null && typeof item === 'object' && !Array.isArray(item)
+      ? extraerRutasEsquema(item)
+      : [],
+  );
+  return Array.from(new Set(rutas));
+}
+
 function migrarConfig(cfg: PlantillaConfig): PlantillaConfig {
   if (!cfg.zonas) return cfg;
   let grupoActual = 0;
@@ -1356,11 +1368,12 @@ const guardarLibre = (texto: string, alineacion: AlineacionTicket, negrita: bool
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const esquema = JSON.parse(String(reader.result));
-        if (esquema === null || typeof esquema !== 'object' || Array.isArray(esquema)) {
-          message.error('El archivo debe contener un objeto JSON');
+        const json = JSON.parse(String(reader.result));
+        if (json === null || typeof json !== 'object') {
+          message.error('El archivo debe contener un objeto o array JSON');
           return;
         }
+        const esquema = Array.isArray(json) ? { data: json } : json;
         const rutas = extraerRutasEsquema(esquema);
         setConfig((c) => ({ ...c, esquema }));
         message.success(rutas.length > 0 ? `Esquema cargado: ${rutas.length} campos disponibles` : 'Esquema cargado (objeto sin campos)');
@@ -1774,8 +1787,13 @@ const guardarLibre = (texto: string, alineacion: AlineacionTicket, negrita: bool
                           }
 
                           // 6. Esquema (campo del JSON de ejemplo importado; la propiedad se elige en Propiedades)
-                          if (rutasEsquema.length > 0) {
-                            const ref = `ESQUEMA:${rutasEsquema[0]}`;
+                          const arrayOrigenZona = zona.tipo === 'detalle' ? zona.arrayOrigen : undefined;
+                          const rutasCampoEsquema = arrayOrigenZona
+                            ? extraerRutasElementoArray(config.esquema, arrayOrigenZona)
+                            : rutasEsquema;
+                          if (rutasCampoEsquema.length > 0) {
+                            const prefijoReferencia = arrayOrigenZona ? 'DETALLE' : 'ESQUEMA';
+                            const ref = `${prefijoReferencia}:${rutasCampoEsquema[0]}`;
                             items.push({ key: 'esquema', label: 'Campo de esquema', icon: <ApartmentOutlined />, onClick: () => agregarLinea(zIdx, ref) });
                           }
 
@@ -2131,8 +2149,18 @@ const guardarLibre = (texto: string, alineacion: AlineacionTicket, negrita: bool
               const esDetalle = ref.startsWith('DETALLE:');
               const esEsquema = ref.startsWith('ESQUEMA:');
               const tieneLabel = !esEspacio && !esSeparador && ref !== 'CAMPO:CODIGO_QR' && ref !== 'CAMPO:CODIGO_BARRAS';
-              const puedeVincularEsquema = tieneLabel && rutasEsquema.length > 0;
               const clave = ref.includes(':') ? ref.slice(ref.indexOf(':') + 1) : '';
+              const arrayOrigenZona = zona?.tipo === 'detalle' ? zona.arrayOrigen : undefined;
+              const rutasCampoEsquema = arrayOrigenZona
+                ? extraerRutasElementoArray(config.esquema, arrayOrigenZona)
+                : rutasEsquema;
+              const claveCampoEsquema = arrayOrigenZona && clave.startsWith(`${arrayOrigenZona}.`)
+                ? clave.slice(arrayOrigenZona.length + 1)
+                : clave;
+              const campoEsquemaSeleccionado = arrayOrigenZona
+                ? (esDetalle || esEsquema) && rutasCampoEsquema.includes(claveCampoEsquema)
+                : esEsquema;
+              const puedeVincularEsquema = tieneLabel && rutasCampoEsquema.length > 0;
               const labelDefault = esCampo ? (labelsDefault[clave] || clave) : esEsquema && linea.calculo ? `${VERBOS_CALCULO[linea.calculo.tipo]} ${linea.calculo.ruta}` : esDetalle ? (CAMPOS_DETALLE_LABELS[clave] || clave) : labelRef(ref);
 
               return (
@@ -2179,14 +2207,15 @@ const guardarLibre = (texto: string, alineacion: AlineacionTicket, negrita: bool
                           style={{ width: '100%', marginTop: 2 }}
                           showSearch
                           optionFilterProp="label"
-                          placeholder={esEsquema ? undefined : 'Asociar campo del esquema…'}
-                          value={esEsquema ? clave : undefined}
+                          placeholder={campoEsquemaSeleccionado ? undefined : 'Asociar campo del esquema…'}
+                          value={campoEsquemaSeleccionado ? claveCampoEsquema : undefined}
                           disabled={ocupado}
                           onChange={(v) => updZonaLineas(lineaActiva.zonaIdx, (l) => {
-                            l[lineaActiva.lineaIdx] = { ...l[lineaActiva.lineaIdx], ref: `ESQUEMA:${v}` } as any;
+                            const prefijoReferencia = arrayOrigenZona ? 'DETALLE' : 'ESQUEMA';
+                            l[lineaActiva.lineaIdx] = { ...l[lineaActiva.lineaIdx], ref: `${prefijoReferencia}:${v}` } as any;
                             return l;
                           })}
-                          options={rutasEsquema.map((r) => ({ label: r, value: r }))}
+                          options={rutasCampoEsquema.map((r) => ({ label: r, value: r }))}
                         />
                       </div>
                     )}

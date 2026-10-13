@@ -3,10 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, message, Form, Input,  Switch, Row, Col, Typography,
   Tabs, Descriptions, InputNumber, Tag, Grid, Divider, DatePicker,
-  Button, Modal, Table, theme,
+  Button, Modal, Table,
 } from 'antd';
 import { Select } from '../../components/Select';
-import { CopyOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { CopyOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -18,6 +18,7 @@ import type { ClienteDTO, CategoriaEntidadDTO, TipoComprobanteNCFDTO } from '../
 import type { CuentaContableResumenDTO, MonedaDTO } from '../../types/contabilidad';
 import ErrorBoundary from '../../components/ErrorBoundary';
 import DetalleCatalogoLayout from '../../components/DetalleCatalogoLayout';
+import FormularioToolbar from '../../components/FormularioToolbar';
 import { formatCurrency, toISOFormat } from '../../utils/formats';
 import PersonasAutorizadasTab from './components/PersonasAutorizadasTab';
 import EntidadGruposProductosTab from '../../components/EntidadGruposProductosTab';
@@ -34,6 +35,11 @@ const SEXO_LABEL: Record<number, string> = {
   1: 'Femenino',
 };
 
+const SEXO_REV: Record<string, number> = {
+  Masculino: 0,
+  Femenino: 1,
+};
+
 const ESTADO_CIVIL_LABEL: Record<number, string> = {
   0: 'Casado(a)',
   1: 'Soltero(a)',
@@ -41,10 +47,33 @@ const ESTADO_CIVIL_LABEL: Record<number, string> = {
   3: 'Viudo(a)',
 };
 
+const ESTADO_CIVIL_REV: Record<string, number> = {
+  Casado: 0,
+  Soltero: 1,
+  Divorciado: 2,
+  Viudo: 3,
+};
+
 const TIPO_IDENTIFICACION_LABEL: Record<number, string> = {
   0: 'RNC',
   1: 'Cédula',
-  2: 'Pasaporte',
+  3: 'Pasaporte',
+};
+
+const TIPO_IDENTIFICACION_REV: Record<string, number> = {
+  RNC: 0,
+  Cedula: 1,
+  Desconocido: 2,
+  Pasaporte: 3,
+};
+
+const enumStringToValor = (valor: any, mapa: Record<string, number>): number | undefined => {
+  if (valor == null || valor === '') return undefined;
+  if (typeof valor === 'number') return valor;
+  const clave = String(valor);
+  if (mapa[clave] !== undefined) return mapa[clave];
+  const entrada = Object.entries(mapa).find(([k]) => k.toLowerCase() === clave.toLowerCase());
+  return entrada ? entrada[1] : undefined;
 };
 
 const ClienteDetalle: React.FC = () => {
@@ -63,9 +92,9 @@ const ClienteDetalle: React.FC = () => {
   const [editando, setEditando] = useState(false);
   const [formTouched, setFormTouched] = useState(false);
   const [form] = Form.useForm();
+  const empresaValue = Form.useWatch('empresa', form);
   const screens = Grid.useBreakpoint();
   const isLarge = screens.xxl === true;
-  const { token } = theme.useToken();
 
   // Estados para catálogos
   const [tiposNCF, setTiposNCF] = useState<TipoComprobanteNCFDTO[]>([]);
@@ -94,11 +123,62 @@ const ClienteDetalle: React.FC = () => {
     return () => setPageTitleOverride('');
   }, [setActiveModule, setPageTitleOverride]);
 
+  const poblarFormulario = useCallback((res: ClienteDTO) => {
+    form.setFieldsValue({
+      codigo: res.codigo,
+      nombre: res.nombre,
+      tipoIdentificacion: enumStringToValor(res.tipoIdentificacion, TIPO_IDENTIFICACION_REV),
+      identificacion: res.identificacion,
+      telefono: res.telefono,
+      telefonoAdicional: res.telefonoAdicional,
+      correoElectronico: res.correoElectronico,
+      direccion: res.direccion,
+      sexo: enumStringToValor(res.sexo, SEXO_REV),
+      estadoCivil: enumStringToValor(res.estadoCivil, ESTADO_CIVIL_REV),
+      fechaNacimiento: res.fechaNacimiento ? dayjs(res.fechaNacimiento) : null,
+      nota: res.nota,
+      activo: res.activo,
+      empresa: !!res.empresa,
+      facturaDocumentosVencidos: !!res.facturaDocumentosVencidos,
+      limiteCredito: res.limiteCredito,
+      diasCredito: res.diasCredito,
+      creditoSuspendido: res.creditoSuspendido,
+      exentoImpuesto: res.exentoImpuesto,
+      margen: res.margen,
+      porcientoDescuento: res.porcientoDescuento,
+      // Nuevos campos
+      sector: res.sector,
+      ciudad: res.ciudad,
+      zona: res.zona,
+      nombreComercial: res.nombreComercial,
+      contacto: res.contacto,
+      telefonoContacto: res.telefonoContacto,
+      fax: res.fax,
+      fechaIngreso: res.fechaIngreso ? dayjs(res.fechaIngreso) : null,
+      codigoVendedor: res.codigoVendedor,
+      vendedorNombre: res.vendedorNombre,
+      codigoListaPrecio: res.codigoListaPrecio,
+      listaPrecioNombre: res.listaPrecioNombre,
+      perfil: res.perfil,
+      comision: res.comision,
+      facebook: res.facebook,
+      twitter: res.twitter,
+      codigoMoneda: res.codigoMoneda,
+      balance: res.balance,
+      fechaUltimoPago: res.fechaUltimoPago,
+      montoUltimoPago: res.montoUltimoPago,
+      documentoUltimoPago: res.documentoUltimoPago,
+      categoria: res.categoria?.codigo,
+      tipoNcf: res.tipoNCF?.codigo,
+      cuentaContable: res.cuentaContable?.noCuenta,
+    });
+  }, [form]);
+
   useEffect(() => {
     if (esNuevo) {
       setPageTitleOverride('Nuevo Cliente');
       setEditando(true);
-      form.setFieldsValue({ activo: true, tipoIdentificacion: 0 });
+      form.setFieldsValue({ activo: true, tipoIdentificacion: 0, empresa: false });
       return;
     }
     if (!codigo) return;
@@ -117,52 +197,7 @@ const ClienteDetalle: React.FC = () => {
         }
         setData(res);
         setPageTitleOverride(res.nombre || codigo);
-        form.setFieldsValue({
-          codigo: res.codigo,
-          nombre: res.nombre,
-          tipoIdentificacion: res.tipoIdentificacion,
-          identificacion: res.identificacion,
-          telefono: res.telefono,
-          telefonoAdicional: res.telefonoAdicional,
-          correoElectronico: res.correoElectronico,
-          direccion: res.direccion,
-          sexo: res.sexo,
-          estadoCivil: res.estadoCivil,
-          fechaNacimiento: res.fechaNacimiento ? dayjs(res.fechaNacimiento) : null,
-          nota: res.nota,
-          activo: res.activo,
-          limiteCredito: res.limiteCredito,
-          diasCredito: res.diasCredito,
-          creditoSuspendido: res.creditoSuspendido,
-          exentoImpuesto: res.exentoImpuesto,
-          margen: res.margen,
-          porcientoDescuento: res.porcientoDescuento,
-          // Nuevos campos
-          sector: res.sector,
-          ciudad: res.ciudad,
-          zona: res.zona,
-          nombreComercial: res.nombreComercial,
-          contacto: res.contacto,
-          telefonoContacto: res.telefonoContacto,
-          fax: res.fax,
-          fechaIngreso: res.fechaIngreso ? dayjs(res.fechaIngreso) : null,
-          codigoVendedor: res.codigoVendedor,
-          vendedorNombre: res.vendedorNombre,
-          codigoListaPrecio: res.codigoListaPrecio,
-          listaPrecioNombre: res.listaPrecioNombre,
-          perfil: res.perfil,
-          comision: res.comision,
-          facebook: res.facebook,
-          twitter: res.twitter,
-          codigoMoneda: res.codigoMoneda,
-          balance: res.balance,
-          fechaUltimoPago: res.fechaUltimoPago,
-          montoUltimoPago: res.montoUltimoPago,
-          documentoUltimoPago: res.documentoUltimoPago,
-          categoria: res.categoria?.codigo,
-          tipoNcf: res.tipoNcf?.codigo,
-          cuentaContable: res.cuentaContable?.noCuenta,
-        });
+        poblarFormulario(res);
       })
       .catch((err: any) => {
         if (err?.name === 'CanceledError' || abortController.signal.aborted) return;
@@ -214,6 +249,30 @@ const ClienteDetalle: React.FC = () => {
       navigate('/MCliente');
     }
   }, [editando, formTouched, navigate]);
+
+  const handleCancelar = useCallback(() => {
+    const descartar = () => {
+      if (esNuevo) {
+        navigate('/MCliente');
+        return;
+      }
+      setEditando(false);
+      setFormTouched(false);
+      if (data) poblarFormulario(data);
+    };
+
+    if (formTouched) {
+      Modal.confirm({
+        title: '¿Salir sin guardar?',
+        content: 'Los cambios no guardados se perderán.',
+        okText: 'Salir',
+        cancelText: 'Cancelar',
+        onOk: descartar,
+      });
+      return;
+    }
+    descartar();
+  }, [esNuevo, formTouched, data, navigate, poblarFormulario]);
 
   // Permisos
   const usuario = useAuthStore((s: any) => s.usuario);
@@ -270,6 +329,8 @@ const ClienteDetalle: React.FC = () => {
         direccion: values.direccion || '',
         nota: values.nota || '',
         activo: values.activo ?? true,
+        empresa: values.empresa ?? false,
+        facturaDocumentosVencidos: values.facturaDocumentosVencidos ?? false,
         sexo: values.sexo,
         estadoCivil: values.estadoCivil,
         fechaNacimiento: values.fechaNacimiento ? toISOFormat(dayjs(values.fechaNacimiento).toDate()) : null,
@@ -301,13 +362,17 @@ const ClienteDetalle: React.FC = () => {
 
       // Mapear selects de catálogo que el backend espera como objetos anidados
       if (values.categoria) (payload as any).categoria = { codigo: values.categoria, descripcion: '' };
-      if (values.tipoNcf) (payload as any).tipoNcf = { codigo: values.tipoNcf, nombre: '' };
+      if (values.tipoNcf) (payload as any).tipoNCF = { codigo: values.tipoNcf, nombre: '' };
       if (values.cuentaContable) (payload as any).cuentaContable = { noCuenta: values.cuentaContable, nombre: '' };
 
       if (!esNuevo && data) {
-        await clienteApi.actualizar(sucursalActiva, { ...data, ...payload });
-        message.success('Cliente actualizado correctamente');
+        const { warning } = await clienteApi.actualizar(sucursalActiva, { ...data, ...payload });
         setFormTouched(false);
+        if (warning) {
+          message.warning(warning, 6);
+        } else {
+          message.success('Cliente actualizado correctamente');
+        }
         navigate('/MCliente');
       } else {
         const creado = await clienteApi.crear(sucursalActiva, payload);
@@ -523,11 +588,12 @@ const ClienteDetalle: React.FC = () => {
         setData(res);
         setPageTitleOverride(res.nombre || codigo);
         form.setFieldsValue({
-          codigo: res.codigo, nombre: res.nombre, tipoIdentificacion: res.tipoIdentificacion,
+          codigo: res.codigo, nombre: res.nombre, tipoIdentificacion: enumStringToValor(res.tipoIdentificacion, TIPO_IDENTIFICACION_REV),
           identificacion: res.identificacion, telefono: res.telefono, telefonoAdicional: res.telefonoAdicional,
-          correoElectronico: res.correoElectronico, direccion: res.direccion, sexo: res.sexo,
-          estadoCivil: res.estadoCivil, fechaNacimiento: res.fechaNacimiento ? dayjs(res.fechaNacimiento) : null, nota: res.nota,
-          activo: res.activo, limiteCredito: res.limiteCredito, diasCredito: res.diasCredito,
+          correoElectronico: res.correoElectronico, direccion: res.direccion, sexo: enumStringToValor(res.sexo, SEXO_REV),
+          estadoCivil: enumStringToValor(res.estadoCivil, ESTADO_CIVIL_REV), fechaNacimiento: res.fechaNacimiento ? dayjs(res.fechaNacimiento) : null, nota: res.nota,
+          activo: res.activo, empresa: !!res.empresa, facturaDocumentosVencidos: !!res.facturaDocumentosVencidos,
+          limiteCredito: res.limiteCredito, diasCredito: res.diasCredito,
           creditoSuspendido: res.creditoSuspendido, exentoImpuesto: res.exentoImpuesto,
           margen: res.margen, porcientoDescuento: res.porcientoDescuento,
           // Nuevos campos
@@ -541,7 +607,7 @@ const ClienteDetalle: React.FC = () => {
           balance: res.balance, fechaUltimoPago: res.fechaUltimoPago,
           montoUltimoPago: res.montoUltimoPago, documentoUltimoPago: res.documentoUltimoPago,
           categoria: res.categoria?.codigo,
-          tipoNcf: res.tipoNcf?.codigo, cuentaContable: res.cuentaContable?.noCuenta,
+          tipoNcf: res.tipoNCF?.codigo, cuentaContable: res.cuentaContable?.noCuenta,
         });
       })
       .catch((err: any) => {
@@ -556,7 +622,7 @@ const ClienteDetalle: React.FC = () => {
 
   // ===== Componentes auxiliares render =====
 
-  const renderCampo = (nombre: string, children: React.ReactNode, span?: number) => (
+  const renderCampo = (nombre: string, children: React.ReactNode, span?: number | { xs?: number; sm?: number; md?: number; lg?: number; xl?: number; xxl?: number }) => (
     <Descriptions.Item label={nombre} {...(span ? { span } : {})}>
       {children}
     </Descriptions.Item>
@@ -577,7 +643,7 @@ const ClienteDetalle: React.FC = () => {
   // ===== Card: Datos Generales =====
   const renderDatosGenerales = () => (
     <Card title="Datos Generales" className="paces-card" style={{ marginBottom: 16 }}>
-      <Descriptions bordered size="small" column={{ xs: 1, sm: 2 }} styles={{ content: { background: 'transparent' } }}>
+      <Descriptions bordered size="small" column={{ xs: 1, sm: 3 }} styles={{ content: { background: 'transparent' } }}>
         {renderCampo('Código',
           esSoloLectura ? (
             <Text style={{ fontFamily: 'monospace' }}>{data?.codigo}</Text>
@@ -587,7 +653,7 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           ) : (
             <Form.Item name="codigo" noStyle rules={[{ required: true, message: 'Obligatorio' }]}>
-              <Input placeholder="Código" maxLength={20} />
+              <Input disabled placeholder="Código" maxLength={20} />
             </Form.Item>
           )
         )}
@@ -598,13 +664,14 @@ const ClienteDetalle: React.FC = () => {
             <Form.Item name="nombre" noStyle rules={[{ required: true, message: 'Obligatorio' }]}>
               <Input placeholder="Nombre del cliente" maxLength={100} />
             </Form.Item>
-          )
+          ),
+          { sm: 2 }
         )}
         {renderCampo('Tipo Identificación',
           esSoloLectura ? (
             <Text>{(() => {
-              const tipoIdNum = Number(data?.tipoIdentificacion);
-              const etiqueta = TIPO_IDENTIFICACION_LABEL[Number.isNaN(tipoIdNum) ? -1 : tipoIdNum];
+              const val = enumStringToValor(data?.tipoIdentificacion, TIPO_IDENTIFICACION_REV);
+              const etiqueta = TIPO_IDENTIFICACION_LABEL[val ?? -1];
               return etiqueta || data?.tipoIdentificacion || '-';
             })()}</Text>
           ) : (
@@ -613,7 +680,7 @@ const ClienteDetalle: React.FC = () => {
                 options={[
                   { value: 0, label: 'RNC' },
                   { value: 1, label: 'Cédula' },
-                  { value: 2, label: 'Pasaporte' },
+                  { value: 3, label: 'Pasaporte' },
                 ]}
               />
             </Form.Item>
@@ -628,9 +695,12 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
-        {renderCampo('Sexo',
+        {!empresaValue && renderCampo('Sexo',
           esSoloLectura ? (
-            <Text>{SEXO_LABEL[data?.sexo ?? -1] || '-'}</Text>
+            <Text>{(() => {
+              const val = enumStringToValor(data?.sexo, SEXO_REV);
+              return SEXO_LABEL[val ?? -1] || '-';
+            })()}</Text>
           ) : (
             <Form.Item name="sexo" noStyle>
               <Select style={{ width: '100%' }} allowClear placeholder="Seleccione sexo"
@@ -642,9 +712,12 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
-        {renderCampo('Estado Civil',
+        {!empresaValue && renderCampo('Estado Civil',
           esSoloLectura ? (
-            <Text>{ESTADO_CIVIL_LABEL[data?.estadoCivil ?? -1] || '-'}</Text>
+            <Text>{(() => {
+              const val = enumStringToValor(data?.estadoCivil, ESTADO_CIVIL_REV);
+              return ESTADO_CIVIL_LABEL[val ?? -1] || '-';
+            })()}</Text>
           ) : (
             <Form.Item name="estadoCivil" noStyle>
               <Select style={{ width: '100%' }} allowClear placeholder="Seleccione estado civil"
@@ -658,7 +731,7 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
-        {renderCampo('Fecha Nacimiento',
+        {!empresaValue && renderCampo('Fecha Nacimiento',
           esSoloLectura ? (
             <Text>{data?.fechaNacimiento || '-'}</Text>
           ) : (
@@ -694,6 +767,15 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
+        {renderCampo('Empresa',
+          esSoloLectura ? (
+            <Tag color={data?.empresa ? 'blue' : 'default'}>{data?.empresa ? 'Empresa' : 'Persona'}</Tag>
+          ) : (
+            <Form.Item name="empresa" noStyle valuePropName="checked" initialValue={false}>
+              <Switch checkedChildren="Sí" unCheckedChildren="No" />
+            </Form.Item>
+          )
+        )}
         {renderCampo('Categoría',
           esSoloLectura ? (
             <Text>{data?.categoria?.nombre || '-'}</Text>
@@ -718,7 +800,7 @@ const ClienteDetalle: React.FC = () => {
         )}
         {renderCampo('Tipo NCF',
           esSoloLectura ? (
-            <Text>{data?.tipoNcf?.nombre || '-'}</Text>
+            <Text>{data?.tipoNCF?.nombre || '-'}</Text>
           ) : (
             <Form.Item name="tipoNcf" noStyle rules={[{ required: true, message: 'Obligatorio' }]}>
               <Select style={{ width: '100%' }} allowClear placeholder="Seleccione tipo NCF"
@@ -747,7 +829,7 @@ const ClienteDetalle: React.FC = () => {
               <Input.TextArea placeholder="Notas del cliente" rows={3} autoSize={{ minRows: 3, maxRows: 8 }} maxLength={500} showCount />
             </Form.Item>
           ),
-          2 // span 2 columnas
+          { sm: 3 }
         )}
       </Descriptions>
     </Card>
@@ -859,6 +941,15 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
+        {renderCampo('Factura Docs. Vencidos',
+          esSoloLectura ? (
+            renderReadonlyTag(data?.facturaDocumentosVencidos)
+          ) : (
+            <Form.Item name="facturaDocumentosVencidos" noStyle valuePropName="checked" initialValue={false}>
+              <Switch checkedChildren="Sí" unCheckedChildren="No" />
+            </Form.Item>
+          )
+        )}
       </Descriptions>
     </Card>
   );
@@ -893,44 +984,14 @@ const ClienteDetalle: React.FC = () => {
   // ===== Render Principal =====
   const renderFormulario = () => (
     <>
-      {/* Encabezado fijo con aviso global */}
-      <div
-        style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 10,
-          background: editando && formTouched ? token.colorWarningBg : token.colorBgContainer,
-          borderBottom: `1px solid ${token.colorBorderSecondary}`,
-          padding: '12px 16px',
-          borderRadius: 6,
-          marginBottom: 16,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 8,
-          boxShadow: editando && formTouched ? token.boxShadowSecondary : 'none',
-        }}
-      >
-        <div>
-          <Text strong style={{ fontSize: 15, color: token.colorTextHeading }}>
-            {data?.nombre || data?.codigo || 'Nuevo Cliente'}
-          </Text>
-          <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
-            {esNuevo ? 'Creando cliente' : `Código: ${data?.codigo}`}
-          </Text>
-        </div>
-        {editando && formTouched && (
-          <Tag color="warning" icon={<ClockCircleOutlined />} style={{ fontSize: 13, padding: '4px 10px', borderRadius: 6 }}>
-            Cambios sin guardar — revise antes de salir
-          </Tag>
-        )}
-        {!editando && !esNuevo && (
-          <Tag color="success" style={{ fontSize: 13, padding: '4px 10px', borderRadius: 6 }}>
-            Solo lectura
-          </Tag>
-        )}
-      </div>
+      {editando && (
+        <FormularioToolbar
+          saving={guardando}
+          mode={esNuevo ? 'crear' : 'editar'}
+          onGuardar={handleGuardar}
+          onCancelar={handleCancelar}
+        />
+      )}
 
       <Form form={form} layout="vertical" size="small" onValuesChange={() => setFormTouched(true)} disabled={guardando}>
       {isLarge ? (
@@ -972,7 +1033,6 @@ const ClienteDetalle: React.FC = () => {
         dataDisponible={esNuevo || !!data}
         modo={esNuevo ? 'crear' : 'editar'}
         onEditar={(!esNuevo && !editando && puedeEditar) ? () => { setEditando(true); cargarCategorias(); cargarTiposNCF(); cargarCuentasContables(); cargarMonedas(); } : undefined}
-        onGuardar={(esNuevo || editando) ? handleGuardar : undefined}
         guardando={guardando}
         extraActions={esNuevo ? (
           <Button icon={<CopyOutlined />} onClick={abrirModalClonar} disabled={guardando}>

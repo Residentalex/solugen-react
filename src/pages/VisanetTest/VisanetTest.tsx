@@ -402,8 +402,8 @@ const VisanetTest: React.FC = () => {
       const detalleAdquirentes = adquirentes.map((adquirente) => {
         const transacciones = adquirente.data ?? [];
         const primera = transacciones[0];
-        const host = primera?.acquirerName || `HOST ${adquirente.processingHost ?? ''}`;
-        const lote = primera?.batchNumber || adquirente.batchNumber || '';
+        const host = primera?.acquirerName || 'SIN HOST';
+        const lote = String(primera?.batchNumber || adquirente.batchNumber || '').padStart(3, '0');
         const movimientos = transacciones.map((transaccion) => {
           const monto = Math.abs(Number(transaccion.totalAmount) || 0);
           const esAnulacion =
@@ -866,6 +866,7 @@ const VisanetTest: React.FC = () => {
       entryMode: record.entryMode,
       cardHolderName: record.nombtar,
       transactionDate,
+      transactionTime: record.transactionTime || undefined,
     };
     return { res, monto: record.monto ?? 0 };
   };
@@ -999,7 +1000,7 @@ const VisanetTest: React.FC = () => {
       const grupos = new Map<string, { host: string; lote: string; vouchers: VisanetVoucherDTO[] }>();
       vouchers.forEach((voucher) => {
         const host = voucher.host?.trim() || 'SIN HOST';
-        const lote = voucher.noLote?.trim() || 'SIN LOTE';
+        const lote = String(voucher.noLote || '').trim().padStart(3, '0');
         const clave = `${host}::${lote}`;
         const grupo = grupos.get(clave);
         if (grupo) {
@@ -1015,7 +1016,7 @@ const VisanetTest: React.FC = () => {
       const montoAnulaciones = anulaciones.reduce((total, voucher) => total + Number(voucher.monto || 0), 0);
 
       const gruposHtml = Array.from(grupos.values()).map(({ host, lote, vouchers: vouchersGrupo }) => {
-        const hostMostrado = host.toUpperCase() === 'MCARD' ? 'MASTERCARD' : host;
+        const hostMostrado = host;
         const movimientos = vouchersGrupo.map((voucher) => {
           const esAnulacion = esAnulado(voucher.anulado);
           const monto = Number(voucher.monto || 0);
@@ -1027,7 +1028,7 @@ const VisanetTest: React.FC = () => {
           const fechaMovimiento = fechaIsoDeNoSec(voucher.noSec);
           const detalles = [
             aprobacion ? escaparHtml(aprobacion) : '',
-            fechaMovimiento ? `FECHA: ${escaparHtml(dayjs(fechaMovimiento).format('DD/MM/YY'))}` : '',
+            fechaMovimiento ? `FECHA: ${escaparHtml(dayjs(fechaMovimiento).format('DD/MM/YYYY'))}` : '',
           ].filter(Boolean).join('   ');
 
           return `<div class="movimiento ${esAnulacion ? 'anulacion' : ''}">

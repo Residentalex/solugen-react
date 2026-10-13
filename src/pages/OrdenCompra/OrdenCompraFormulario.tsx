@@ -604,7 +604,6 @@ const OrdenCompraFormulario: React.FC = () => {
                   <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }} label="Fecha Documento">
                     <DatePicker
                       style={{ width: '100%' }}
-                      format="YYYY-MM-DD"
                       disabledDate={(current) => {
                         if (!current) return false;
                         if (data?.documento?.fechaPermitida === 'MenorIgualFechaDia') {

@@ -64,7 +64,6 @@ const ReporteToolbar: React.FC<ReporteToolbarProps> = ({
         <RangePicker
           value={fechas}
           onChange={onFechasChange as any}
-          format="YYYY-MM-DD"
           allowClear={false}
         />
       )}

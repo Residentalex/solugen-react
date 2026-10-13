@@ -103,11 +103,16 @@ export function useCargaDocumento<TEnc>(options: UseCargaDocumentoOptions<TEnc>)
       }
       setData(prev => {
         const merged: any = { ...(prev ?? {}), ...res };
-        // Aplicar secciones que llegaron antes que el encabezado
         for (const def of Object.values(secciones)) {
           if (pendientesRef.current[def.prop] !== undefined) {
+            // Aplicar secciones que llegaron antes que el encabezado
             merged[def.prop] = pendientesRef.current[def.prop];
             delete pendientesRef.current[def.prop];
+          } else if (prev && prev[def.prop] !== undefined) {
+            // Una seccion ya cargada gana sobre el campo del encabezado
+            // (los encabezados suelen traer estas props vacias y no deben
+            // pisar lo que la seccion ya habia mergeado)
+            merged[def.prop] = prev[def.prop];
           }
         }
         return merged;
@@ -142,6 +147,10 @@ export function useCargaDocumento<TEnc>(options: UseCargaDocumentoOptions<TEnc>)
 
   // Montaje / cambio de documento o sucursal
   useEffect(() => {
+    // Reset de guards para que al cambiar id/sucursal se recarguen las
+    // secciones (si no, quedarian datos del documento anterior)
+    cargadasRef.current.clear();
+    pendientesRef.current = {};
     cargarTodo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, sucursal]);

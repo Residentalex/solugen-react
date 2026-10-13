@@ -168,7 +168,6 @@ const FacturaPOSFormulario: React.FC = () => {
       } as FacturaPOSFormularioDTO;
     },
     onEncabezadoCargado: (res) => {
-      setPageTitleOverride(`${res.documento?.codigo || 'FPV'}-${res.noDocumento || ''}`);
       // Sincronizar estado local editable
       setDetalles(res.detalles || []);
       setCobros((res.cobros || cobrosVacios()) as unknown as CobroDTO);
@@ -199,6 +198,10 @@ const FacturaPOSFormulario: React.FC = () => {
         facturaPOSApi.obtenerClientes(sucursalActiva)
           .then(setClientesCache)
           .catch(() => undefined);
+      }
+      // Actualizar título con documento en modo editar
+      if (mode === 'editar') {
+        setPageTitleOverride(`Editar Factura POS ${res.documento?.codigo || 'FPV'}-${res.noDocumento || ''}`);
       }
     },
   });
@@ -1128,7 +1131,7 @@ const FacturaPOSFormulario: React.FC = () => {
           <Col xs={24} sm={12} lg={8}>
             <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
               <FloatingField label="Fecha Documento" required>
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                <DatePicker style={{ width: '100%' }}
                   disabledDate={(current) => {
                     if (!current) return false;
                     const cierre = fechasCierre?.[sucursalActiva];

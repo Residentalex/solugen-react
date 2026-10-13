@@ -25,6 +25,7 @@ export interface VisanetVoucherDTO {
   tokenECR?: string;
   stan?: string;
   transactionDate?: string;
+  transactionTime?: string;
   isoNumCode?: string;
   isDcc?: boolean;
   exchangeRate?: string;
@@ -61,6 +62,7 @@ export interface VisanetResponseDTO {
   terminalId?: string;
   merchantId?: string;
   transactionDate?: string;
+  transactionTime?: string;
   entryMode?: string;
   isoNumCode?: string;
   isDcc?: boolean;

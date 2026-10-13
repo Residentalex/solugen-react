@@ -22,7 +22,7 @@ const CuentasBancariasTab: React.FC<Props> = ({ codigoEntidad, sucursal }) => {
 
   // Catalogo MONEDAS real de la sucursal. Antes el Select traia una lista fija embebida
   // (DOP/USD/EUR) que se desactualizaba contra el maestro MONEDAS.
-  const { monedas, loading: monedasLoading } = useMonedasCatalogo(sucursal);
+  const { monedas, loading: monedasLoading } = useMonedasCatalogo();
   const opcionesMoneda = useMemo(
     () => monedas.map((m) => ({ value: m.codigo, label: `${m.codigo} - ${toTitleCase(m.nombre || '')}` })),
     [monedas],

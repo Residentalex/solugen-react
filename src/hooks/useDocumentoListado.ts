@@ -111,12 +111,13 @@ export function useDocumentoListado<T extends { id: number; documento?: string }
           salto: (pagina - 1) * filas,
           desde,
           hasta,
-          documento: busqueda,
-          nCF: busqueda,
-          concepto: busqueda,
-          entidad: busqueda,
-          referencia: busqueda,
-          almacen: busqueda,
+documento: busqueda,
+           nCF: busqueda,
+           concepto: busqueda,
+           entidad: busqueda,
+           referencia: busqueda,
+           almacen: busqueda,
+           numeroCta: busqueda,
         });
       } else {
         result = await cfg.fetchVista(

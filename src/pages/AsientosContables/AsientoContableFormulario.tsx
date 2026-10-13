@@ -96,7 +96,7 @@ const AsientoContableFormulario: React.FC = () => {
   const [selectedEntidad, setSelectedEntidad] = useState<EntidadDTO | null>(null);
 
   // ===== Campos editables nuevos (Moneda, Sucursal, Cta Bancaria, Beneficiario, Detalles, Docs) =====
-  const { monedas: monedasCache } = useMonedasCatalogo(sucursalActiva);
+  const { monedas: monedasCache } = useMonedasCatalogo();
   const [selectedMoneda, setSelectedMoneda] = useState<string>('');
   const [sucursalesCache, setSucursalesCache] = useState<any[]>([]);
   const [selectedSucursal, setSelectedSucursal] = useState<string>('');
@@ -873,7 +873,7 @@ const AsientoContableFormulario: React.FC = () => {
                 <Col xs={24} sm={12} lg={9}>
                   <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
                     <FloatingField label="Fecha" required>
-                      <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                      <DatePicker style={{ width: '100%' }}
                         disabledDate={(current) => {
                           if (permisoModificarAdmin) return false;
                           if (!current) return false;

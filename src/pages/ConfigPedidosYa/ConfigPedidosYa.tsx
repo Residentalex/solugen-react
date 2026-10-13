@@ -16,6 +16,8 @@ const { Text } = Typography;
 
 const ConfigPedidosYa: React.FC = () => {
   const setActiveModule = useUIStore((s) => s.setActiveModule);
+  const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
+  const pageTitleOverride = useUIStore((s) => s.pageTitleOverride);
   const updateToolbar = useUIStore((s) => s.updateToolbar);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
@@ -55,10 +57,20 @@ const ConfigPedidosYa: React.FC = () => {
   }, [sucursalActiva]);
 
   useEffect(() => {
-    setActiveModule('ConfigPedidosYa');
+    setActiveModule('MConfigPedidosYa');
+    setPageTitleOverride('Configuracion Pedidos YA');
     updateToolbar({});
-    return () => resetToolbar();
-  }, [setActiveModule, updateToolbar, resetToolbar]);
+    return () => {
+      resetToolbar();
+      setPageTitleOverride('');
+    };
+  }, [setActiveModule, setPageTitleOverride, updateToolbar, resetToolbar]);
+
+  useEffect(() => {
+    if (pageTitleOverride !== 'Configuracion Pedidos YA') {
+      setPageTitleOverride('Configuracion Pedidos YA');
+    }
+  }, [pageTitleOverride, setPageTitleOverride]);
 
   useEffect(() => {
     cargarConfig();

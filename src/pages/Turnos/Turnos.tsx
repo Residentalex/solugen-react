@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -304,7 +304,6 @@ const Turnos: React.FC = () => {
             />
             <RangePicker
               style={{ width: '100%', maxWidth: 200 }}
-              format="YYYY-MM-DD"
               onChange={handleDateChange}
               placeholder={["Desde", "Hasta"]}
             />

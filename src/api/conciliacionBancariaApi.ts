@@ -77,9 +77,8 @@ export const conciliacionBancariaApi = {
     if (params.hasta) queryParams.hasta = params.hasta;
     if (params.documento) {
       queryParams.numeroCta = params.documento;
-      const id = parseInt(params.documento, 10);
-      if (!isNaN(id) && id > 0) queryParams.concilID = id;
     }
+    if (params.numeroCta) queryParams.numeroCta = params.numeroCta;
     const { data } = await apiClient.get<ApiResponse<ConciliacionBancariaVistaDTO[]>>(
       `${BASE}/${sucursal}`, { params: queryParams }
     );

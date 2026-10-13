@@ -432,7 +432,7 @@ const PlantillaSuplidorFormulario: React.FC = () => {
                       label="Fecha"
                       rules={[{ required: true, message: 'La fecha es requerida' }]}
                     >
-                      <DatePicker format="YYYY-MM-DD" style={{ width: '100%' }}
+                      <DatePicker style={{ width: '100%' }}
                         disabledDate={(current) => {
                           if (!current) return false;
                           const cierre = fechasCierre?.[sucursalActiva];
@@ -548,7 +548,7 @@ const PlantillaSuplidorFormulario: React.FC = () => {
                     label="Fecha"
                     rules={[{ required: true, message: 'La fecha es requerida' }]}
                   >
-                    <DatePicker format="YYYY-MM-DD" style={{ width: '100%' }}
+                    <DatePicker style={{ width: '100%' }}
                       disabledDate={(current) => {
                         if (!current) return false;
                         const cierre = fechasCierre?.[sucursalActiva];

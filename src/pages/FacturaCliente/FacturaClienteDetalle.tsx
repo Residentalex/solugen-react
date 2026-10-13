@@ -327,7 +327,6 @@ const FacturaClienteDetalle: React.FC = () => {
 
   const estadoInfo = ESTADO_DOCUMENTO_MAP[toEstadoNum(documentoActivo.estado)] || { label: 'Desconocido', color: 'default' };
   const esCerrado = toPeriodoNum(documentoActivo.periodo) === 6;
-  const tienePagos = pagosAsociados.length > 0;
   const totalPagado = pagosAsociados.reduce(
     (suma: number, transaccion: any) => suma + (Number(transaccion.monto) || 0),
     0,
@@ -776,10 +775,10 @@ const FacturaClienteDetalle: React.FC = () => {
         }}
         onEditar={() => navigate(`/FFAC/${id}/editar`)}
         onAplicar={handleAplicar}
-        onAnular={tienePagos ? undefined : async () => setModalAnularOpen(true)}
+        onAnular={async () => setModalAnularOpen(true)}
         onPostear={documentoActivo.concepto?.noAsientos ? undefined : handlePostear}
         onRevisado={handleRevisado}
-        onDesaplicar={tienePagos ? undefined : async () => setModalDesaplicarOpen(true)}
+        onDesaplicar={async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
         extraButtons={id ? (
           <>
@@ -949,7 +948,14 @@ const FacturaClienteDetalle: React.FC = () => {
           <Col xxl={6}>
             <EntidadCard entidad={documentoActivo.cliente} fallbackTitulo="Cliente" />
             <TotalesCard subTotal={documentoActivo.subTotal} descuento={documentoActivo.descuento} impuestos={documentoActivo.impuestos} total={documentoActivo.total} alignRight={false}
-              adorno={<AdornoDocumentoPagado total={documentoActivo.total} saldoPendiente={saldoPendiente} />}
+                adorno={
+                  <AdornoDocumentoPagado
+                    total={documentoActivo.total}
+                    saldoPendiente={saldoPendiente}
+                    documentosRelacionados={documentosRelacionados}
+                    idDocumento={documentoActivo.id}
+                  />
+                }
               monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
               monedaNombre={documentoActivo.moneda?.nombre || monedaDefault.nombre}
               tasa={documentoActivo.tasa ?? 1}
@@ -1079,7 +1085,14 @@ const FacturaClienteDetalle: React.FC = () => {
 
           <div style={{ marginTop: 24 }}>
             <TotalesCard subTotal={documentoActivo.subTotal} descuento={documentoActivo.descuento} impuestos={documentoActivo.impuestos} total={documentoActivo.total} alignRight={true}
-            adorno={<AdornoDocumentoPagado total={documentoActivo.total} saldoPendiente={saldoPendiente} />}
+                adorno={
+                  <AdornoDocumentoPagado
+                    total={documentoActivo.total}
+                    saldoPendiente={saldoPendiente}
+                    documentosRelacionados={documentosRelacionados}
+                    idDocumento={documentoActivo.id}
+                  />
+                }
               monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
               monedaNombre={documentoActivo.moneda?.nombre || monedaDefault.nombre}
               tasa={documentoActivo.tasa ?? 1}
@@ -1173,7 +1186,6 @@ const FacturaClienteDetalle: React.FC = () => {
                 return current && (current.isBefore(facDate, 'day') || current.isAfter(today, 'day'));
               }}
               style={{ width: '100%' }}
-              format="YYYY-MM-DD"
             />
           </div>
           <div>

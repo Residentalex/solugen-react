@@ -32,6 +32,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { Sucursal } from '../../types/auth';
 
 import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
+import { facturaSuplidorApi } from '../../api/facturaSuplidorApi';
 import { devolucionCompraApi } from '../../api/devolucionCompraApi';
 import { conceptosApi } from '../../api/conceptosApi';
 import { ordenCompraApi } from '../../api/ordenCompraApi';
@@ -673,6 +674,24 @@ const EntradaAlmacenFormulario: React.FC = () => {
     if (error) {
       message.error(error);
       return;
+    }
+
+    if (mode === 'crear' && ncfValue && selectedEntidad?.codigo) {
+      try {
+        const ncfDuplicado = await facturaSuplidorApi.verificarNCF(
+          sucursalActiva,
+          ncfValue,
+          selectedEntidad.codigo
+        );
+        if (ncfDuplicado) {
+          message.error(`Este NCF ya fue usado por el suplidor ${selectedEntidad.nombre}`);
+          return;
+        }
+      } catch (err: any) {
+        const msg = extraerMensajeError(err, 'Error al validar NCF');
+        message.error(msg);
+        return;
+      }
     }
 
     setSaving(true);
@@ -1912,7 +1931,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
           <Col xs={24} sm={12} lg={9}>
             <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
               <FloatingField label="Fecha Documento" required>
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                <DatePicker style={{ width: '100%' }}
                   disabledDate={(current) => {
                     if (!current) return false;
                     const cierre = fechasCierre?.[sucursalActiva];
@@ -1980,7 +1999,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
           <Col xs={24} sm={12} lg={9}>
             <Form.Item name="fechaRecibo" style={{ marginBottom: 0 }}>
               <FloatingField label="Fecha Recibo">
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                <DatePicker style={{ width: '100%' }}
                   disabledDate={(current) => {
                     if (!current) return false;
                     const cierre = fechasCierre?.[sucursalActiva];

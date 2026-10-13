@@ -205,12 +205,12 @@ const AlmacenFormulario: React.FC = () => {
             </Col>
             <Col xs={24} sm={12} lg={4}>
               <Form.Item name="fechaInicial" label="Fecha Inicial">
-                <DatePicker format="YYYY-MM-DD" style={{ width: '100%' }} />
+                <DatePicker style={{ width: '100%' }} />
               </Form.Item>
             </Col>
             <Col xs={24} sm={12} lg={4}>
               <Form.Item name="fechaCierre" label="Fecha Cierre">
-                <DatePicker format="YYYY-MM-DD" style={{ width: '100%' }} />
+                <DatePicker style={{ width: '100%' }} />
               </Form.Item>
             </Col>
           </Row>

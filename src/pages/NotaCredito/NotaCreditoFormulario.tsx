@@ -68,6 +68,15 @@ import MemoField from '../../components/MemoField/MemoField';
 
 const { Text } = Typography;
 
+const TIPO_IMPUESTO_ENUM: Record<string, 'I' | 'R' | 'L' | 'V'> = {
+  I: 'I', R: 'R', L: 'L', V: 'V',
+  Impuesto: 'I', Retencion: 'R', Informativo: 'V', Otro: 'L', 'Liquidación': 'L',
+};
+
+function resolverTipoImpuesto(imp: any): 'I' | 'R' | 'L' | 'V' {
+  return TIPO_IMPUESTO_ENUM[imp?.tipoImpuesto || ''] || TIPO_IMPUESTO_ENUM[imp?.tipo || ''] || 'I';
+}
+
 // ===== Validación de formato NCF Modificado =====
 function validarNcfModificado(val: string): boolean {
   if (!val) return true;
@@ -154,6 +163,9 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
         nombre: imp.impuesto?.nombre,
         porcentaje: imp.impuesto?.porcentaje,
         tipo: imp.tipo,
+        tipoImpuesto: imp.impuesto?.tipo,
+        asientos: imp.impuesto?.asientos ?? true,
+        noCuenta: imp.impuesto?.noCuenta || '',
         monto: imp.monto,
       }))); // Note: secciones pueden llegar después y sobreescribir asientos/detalles
 
@@ -177,6 +189,12 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
       // Cargar entidades según el concepto
       if (enc.concepto?.codigo) {
         cargarEntidades(enc.concepto.codigo);
+      }
+      // Actualizar título con documento en modo editar
+      if (mode === 'editar') {
+        const docCodigo = enc.documento?.codigo || 'NC';
+        const docNum = enc.noDocumento || '';
+        setPageTitleOverride(`Editar Nota de Crédito ${docCodigo}-${docNum} - ${entidadLabel}`);
       }
     },
   });
@@ -234,6 +252,9 @@ const [asientos, setAsientos] = useState<AsientoContableDTO[]>([]);
         nombre: imp.impuesto?.nombre,
         porcentaje: imp.impuesto?.porcentaje,
         tipo: imp.tipo,
+        tipoImpuesto: imp.impuesto?.tipo,
+        asientos: imp.impuesto?.asientos ?? true,
+        noCuenta: imp.impuesto?.noCuenta || '',
         monto: imp.monto,
       })));
     }
@@ -363,6 +384,9 @@ const [asientos, setAsientos] = useState<AsientoContableDTO[]>([]);
         nombre: imp.impuesto?.nombre,
         porcentaje: imp.impuesto?.porcentaje,
         tipo: imp.tipo,
+        tipoImpuesto: imp.impuesto?.tipo,
+        asientos: imp.impuesto?.asientos ?? true,
+        noCuenta: imp.impuesto?.noCuenta || '',
         monto: imp.monto,
       })));
       setAsientos(cloneData.asientos || []);
@@ -671,6 +695,9 @@ const [asientos, setAsientos] = useState<AsientoContableDTO[]>([]);
           idExterno: imp.idExterno || (imp.codigo || '').replace(/^IMP-0*/, '') || null,
           nombre: imp.nombre || '',
           porcentaje: imp.porcentaje || 0,
+          noCuenta: imp.noCuenta || '',
+          asientos: imp.asientos !== false,
+          tipo: resolverTipoImpuesto(imp),
         },
       })),
       asientos: asientos || [],
@@ -789,9 +816,15 @@ const [asientos, setAsientos] = useState<AsientoContableDTO[]>([]);
     setImpuestosFactura((prev) => {
       const existentes = new Map(prev.map((i) => [i.codigo, i]));
       for (const n of items) {
-        const existente = existentes.get(n.codigo);
+        const existente = existentes.get(n.codigo) as any;
         if (existente) {
-          existentes.set(n.codigo, { ...existente, monto: existente.monto ?? n.monto });
+          existentes.set(n.codigo, {
+            ...existente,
+            monto: existente.monto ?? n.monto,
+            noCuenta: existente.noCuenta || n.noCuenta || '',
+            asientos: existente.asientos ?? true,
+            tipoImpuesto: existente.tipoImpuesto || n.tipoCodigo,
+          } as any);
         } else {
           existentes.set(n.codigo, {
             id: Date.now() + Math.random(),
@@ -801,6 +834,9 @@ const [asientos, setAsientos] = useState<AsientoContableDTO[]>([]);
             porcentaje: n.porcentaje,
             tipo: n.tipo,
             monto: n.monto,
+            noCuenta: n.noCuenta || '',
+            asientos: true,
+            tipoImpuesto: n.tipoCodigo,
           } as any);
         }
       }
@@ -1018,7 +1054,7 @@ const [asientos, setAsientos] = useState<AsientoContableDTO[]>([]);
           <Col xs={24} sm={12} lg={6}>
             <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
               <FloatingField label="Fecha" required>
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                <DatePicker style={{ width: '100%' }}
                   disabledDate={(current) => {
                     if (!current) return false;
                     const cierre = fechasCierre?.[sucursalActiva];
@@ -1541,6 +1577,8 @@ const [asientos, setAsientos] = useState<AsientoContableDTO[]>([]);
         })()}
         montoTotal={Number(form.getFieldValue('total') || 0)}
         codigoMonedaPrincipal={monedaCodigo}
+        documentosIniciales={transaccionesAsociadas.map((d: any) => d.transaccionAsociadaID ?? d.id)}
+        documentoEnviado={data?.noDocumento ? `${documentCode}-${data.noDocumento}` : undefined}
       />
 
       {/* Modal de selección de impuestos */}

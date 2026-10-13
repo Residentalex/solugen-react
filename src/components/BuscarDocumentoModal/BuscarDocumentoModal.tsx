@@ -4,7 +4,16 @@ import { SearchOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { solicitudPagoApi } from '../../api/solicitudPagoApi';
 import { apiClient } from '../../api/client';
-import { formatDate, formatNumber, redondear2 } from '../../utils/formats';
+import { formatDate, formatNumber } from '../../utils/formats';
+import {
+  aCentavos,
+  calcularSaldoPendienteSeguro,
+  desdeCentavos,
+  distribuirMonto,
+  limitarMonto,
+  normalizarMonto,
+  sumarMontos,
+} from './distribucionMontos';
 import { OrigenCuenta } from '../../types/contabilidad';
 
 interface BuscarDocumentoModalProps {
@@ -72,7 +81,6 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
   const searchRef = useRef<any>(null);
   const [montosPorFila, setMontosPorFila] = useState<Record<string, number>>({});
   const [montoADistribuir, setMontoADistribuir] = useState(0);
-  const [distribuido, setDistribuido] = useState(0);
   // Evita warning duplicado cuando antd re-dispara onChange al re-sincronizar la selección controlada
   const warnAsociadoRef = useRef<Set<string>>(new Set());
 
@@ -86,6 +94,8 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
   // objeto completo, pero para esta regla solo importan el codigo y la moneda.
   interface DocumentoPendienteLike {
     id?: number;
+  tipoDocumento?: string;
+  numeroDocumento?: string;
     codigoMoneda?: string;
     moneda?: { codigo?: string } | null;
   }
@@ -144,13 +154,6 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
     return 0;
   }, []);
 
-  // ===== Cálculo de pendiente para UI (nunca negativo) =====
-  // `doc.pendiente` ya viene con signo controlado por el backend; se descarta el
-  // tramo negativo (sobrepago) que se maneja aparte vía `esSobrepago`.
-  const calcularPendiente = useCallback((doc: any): number => {
-    return Math.max(0, _obtenerPendienteReal(doc));
-  }, [_obtenerPendienteReal]);
-
   // ===== Helper: montos financieros unificados de un documento =====
   // Fuente única de verdad para montoOriginal/pagado/saldoPendiente, compartida por
   // las columnas y por handleConfirm. Consume el contracto nuevo del backend
@@ -159,12 +162,21 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
   const _obtenerMontosFinancieros = useCallback((doc: any) => {
     const pendienteReal = _obtenerPendienteReal(doc);
     const esSobrepago = doc?.esSobrepago ?? (pendienteReal < 0);
-    const montoOriginal = redondear2(doc?.montoOriginal ?? (doc?.total || 0));
-    // FALLBACK temporal: si el backend aún no trae `pagado`, inferirlo (redondeado).
-    const pagado = redondear2(doc?.pagado ?? ((doc?.total || 0) - pendienteReal));
-    const saldoPendiente = redondear2(esSobrepago ? Math.abs(pendienteReal) : pendienteReal);
+    const montoOriginal = normalizarMonto(doc?.montoOriginal ?? (doc?.total || 0));
+    // FALLBACK temporal: si el backend aún no trae `pagado`, inferirlo (normalizado).
+    const pagado = normalizarMonto(doc?.pagado ?? ((doc?.total || 0) - pendienteReal));
+    const saldoPendiente = normalizarMonto(esSobrepago ? Math.abs(pendienteReal) : pendienteReal);
     return { pendienteReal, esSobrepago, montoOriginal, pagado, saldoPendiente };
   }, [_obtenerPendienteReal]);
+
+  // ===== Cálculo de pendiente para UI (nunca negativo) =====
+  // Se calcula en centavos enteros desde montoOriginal/pagado, conservando la regla
+  // del proyecto `max(0, montoOriginal - pagado, saldoPendiente)` para no perder
+  // centavos por residuo flotante (ej: 1005.63 - 907.12 = 98.509999...).
+  const calcularPendienteDocumento = useCallback((doc: any): number => {
+    const { montoOriginal, pagado, saldoPendiente } = _obtenerMontosFinancieros(doc);
+    return calcularSaldoPendienteSeguro(montoOriginal, pagado, saldoPendiente);
+  }, [_obtenerMontosFinancieros]);
 
   // ===== Filtrado por texto de búsqueda (documento, NCF, doc. asociado) =====
   const documentosFiltrados = useMemo(() => {
@@ -235,14 +247,13 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
     if (open) {
       setSelectedRowKeys([]);
       setSearchText('');
-      setMontoADistribuir(montoTotal || 0);
-      setDistribuido(0);
+      setMontoADistribuir(normalizarMonto(montoTotal || 0));
       setMontosPorFila({});
       warnAsociadoRef.current = new Set();
 
       cargar().then((docs) => {
         const montosIniciales: Record<string, number> = {};
-        let restante = montoTotal || 0;
+        let restanteCentavos = aCentavos(montoTotal || 0);
 
         if (documentosIniciales && documentosIniciales.length > 0) {
           // Precargar selección y montos desde documentosIniciales
@@ -251,25 +262,24 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
             const doc = docs.find((d: any) => d.id === id);
             if (!doc) return;
             const pendienteReal = _obtenerPendienteReal(doc);
-            const pendiente = calcularPendiente(doc);
             if (doc?.esSobrepago ?? (pendienteReal < 0)) {
               // Sobrepago: asignar valor absoluto
-              const asignar = Math.min(Math.abs(pendienteReal), restante);
+              const asignar = limitarMonto(Math.abs(pendienteReal), desdeCentavos(restanteCentavos));
               montosIniciales[String(id)] = asignar;
-              restante -= asignar;
+              restanteCentavos -= aCentavos(asignar);
               return;
             }
-            if (pendiente <= 0 || restante <= 0) {
+            const pendiente = calcularPendienteDocumento(doc);
+            if (pendiente <= 0 || restanteCentavos <= 0) {
               montosIniciales[String(id)] = 0;
               return;
             }
-            const asignar = Math.min(pendiente, restante);
+            const asignar = limitarMonto(pendiente, desdeCentavos(restanteCentavos));
             montosIniciales[String(id)] = asignar;
-            restante -= asignar;
+            restanteCentavos -= aCentavos(asignar);
           });
         }
 
-        setDistribuido(Object.values(montosIniciales).reduce((s: number, v: any) => s + (v || 0), 0));
         setMontosPorFila(montosIniciales);
       });
     }
@@ -375,70 +385,54 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
         const doc = documentos.find((d) => d.id === key);
         if (!doc) return;
         const pendienteReal = _obtenerPendienteReal(doc);
-        const pendiente = calcularPendiente(doc);
-        // Calcular cuánto está ya asignado en TODAS las filas (incluyendo las ya existentes en 'nuevos')
-        const yaAsignado = Object.values(nuevos).reduce((s, v) => s + v, 0);
-        const disponible = montoADistribuir > 0 ? montoADistribuir - yaAsignado : Math.abs(pendienteReal);
+        const pendiente = calcularPendienteDocumento(doc);
+        // Calcular cuánto está ya asignado en TODAS las filas (en centavos enteros)
+        const yaAsignadoCentavos = aCentavos(sumarMontos(Object.values(nuevos)));
+        const disponibleCentavos = montoADistribuir > 0
+          ? Math.max(0, aCentavos(montoADistribuir) - yaAsignadoCentavos)
+          : aCentavos(Math.abs(pendienteReal));
 
         if (doc?.esSobrepago ?? (pendienteReal < 0)) {
           // Sobrepago: asignar valor absoluto
-          nuevos[String(key)] = Math.min(Math.abs(pendienteReal), Math.max(0, disponible));
+          nuevos[String(key)] = limitarMonto(Math.abs(pendienteReal), desdeCentavos(disponibleCentavos));
           return;
         }
-        if (pendiente <= 0 || (montoADistribuir > 0 && disponible <= 0.01)) {
+        if (pendiente <= 0 || (montoADistribuir > 0 && disponibleCentavos <= 0)) {
           nuevos[String(key)] = 0;
           return;
         }
-        nuevos[String(key)] = Math.min(pendiente, disponible);
+        nuevos[String(key)] = limitarMonto(pendiente, desdeCentavos(disponibleCentavos));
       });
       return nuevos;
-    });
+      });
 
-    // Sincronizar state distribuido con el total calculado
-    const totalNuevo = keysValidas.reduce<number>((s, id) => {
-      const doc = documentos.find((d) => d.id === id);
-      if (!doc) return s;
-      const pendienteReal = _obtenerPendienteReal(doc);
-      if (doc?.esSobrepago ?? (pendienteReal < 0)) {
-        return s + Math.abs(pendienteReal);
-      }
-      const p = calcularPendiente(doc);
-      return s + Math.min(p, Math.max(0, montoADistribuir - s));
-    }, 0);
-    setDistribuido(totalNuevo);
     setSelectedRowKeys(keysValidas);
   };
 
   // ===== Asignar montos automáticamente =====
   const handleAsignar = () => {
     if (montoADistribuir <= 0) return;
-    let restante = montoADistribuir;
-    const nuevosMontos: Record<string, number> = {};
 
     const filas = selectedRowKeys.length > 0 ? selectedRowKeys : documentos.map(d => d.id);
 
-    for (const id of filas) {
-      const key = String(id);
-      if (restante <= 0) { nuevosMontos[key] = 0; continue; }
+    // Límite por fila: doc con asociado y no reasignable → 0; sobrepago → valor absoluto;
+    // el resto → pendiente calculado en centavos.
+    const limites = filas.map((id) => {
       const doc = documentos.find(d => d.id === id);
       // Doc con asociado y no reasignable → no asignar monto (replicar desktop bAsignar_Click)
       if (doc?.referencia && !esDocumentoInventario && (!documentoEnviado || doc.referencia !== documentoEnviado)) {
-        nuevosMontos[key] = 0;
-        continue;
+        return 0;
       }
       const pendienteReal = _obtenerPendienteReal(doc);
-      const pendiente = calcularPendiente(doc);
-      if (doc?.esSobrepago ?? (pendienteReal < 0)) {
-        const asignar = Math.min(Math.abs(pendienteReal), restante);
-        nuevosMontos[key] = asignar;
-        restante -= asignar;
-        continue;
-      }
-      if (pendiente <= 0) { nuevosMontos[key] = 0; continue; }
-      const asignar = Math.min(restante, pendiente);
-      nuevosMontos[key] = asignar;
-      restante -= asignar;
-    }
+      if (doc?.esSobrepago ?? (pendienteReal < 0)) return Math.abs(pendienteReal);
+      return calcularPendienteDocumento(doc);
+    });
+
+    const montos = distribuirMonto(montoADistribuir, limites);
+    const nuevosMontos: Record<string, number> = {};
+    filas.forEach((id, indice) => {
+      nuevosMontos[String(id)] = montos[indice];
+    });
 
     setMontosPorFila(nuevosMontos);
   };
@@ -481,7 +475,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
     },
     {
       title: 'Saldo Pendiente', key: 'saldo', width: 120, align: 'right' as const,
-      render: (_: any, r: any) => <strong>{formatNumber(_obtenerMontosFinancieros(r).saldoPendiente)}</strong>,
+      render: (_: any, r: any) => <strong>{formatNumber(calcularPendienteDocumento(r))}</strong>,
     },
     {
       title: 'Doc. Asociado',
@@ -496,7 +490,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       align: 'right' as const,
       render: (_: any, record: any) => {
         const pendienteReal = _obtenerPendienteReal(record);
-        const pendiente = calcularPendiente(record);
+        const pendiente = calcularPendienteDocumento(record);
         const estaSeleccionado = selectedRowKeys.includes(record.id);
         const maxMonto = (record?.esSobrepago ?? pendienteReal < 0) ? Math.abs(pendienteReal) : pendiente;
         return (
@@ -511,7 +505,8 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
             disabled={!puedeAsignar || !estaSeleccionado}
             value={montosPorFila[String(record.id)] ?? (estaSeleccionado ? maxMonto : 0)}
             onChange={(val) => {
-              setMontosPorFila(prev => ({ ...prev, [String(record.id)]: val || 0 }));
+              const normalizado = limitarMonto(normalizarMonto(val ?? 0), maxMonto);
+              setMontosPorFila(prev => ({ ...prev, [String(record.id)]: normalizado }));
             }}
           />
         );
@@ -542,8 +537,9 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
     const selected = docsSeleccionados.map((doc) => {
       const { pendienteReal, esSobrepago, montoOriginal, pagado, saldoPendiente } =
         _obtenerMontosFinancieros(doc);
-      const pendiente = calcularPendiente(doc);
+      const pendiente = calcularPendienteDocumento(doc);
       const montoFila = montosPorFila[String(doc?.id)] ?? pendiente;
+      const limiteMonto = esSobrepago ? Math.abs(pendienteReal) : pendiente;
 
       return {
         transaccionAsociadaID: doc?.id,
@@ -554,7 +550,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
         montoOriginal,
         pagado,
         saldoPendiente,
-        monto: redondear2(Math.min(montoFila, esSobrepago ? Math.abs(pendienteReal) : pendiente)),
+        monto: limitarMonto(montoFila, limiteMonto),
         fecha: doc?.fechaDocumento,
         tipoDocumento: doc?.tipoDocumento,
         codigoSucursal: doc?.codigoSucursal,
@@ -568,8 +564,8 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
     onClose();
   };
 
-  // Calcular total distribuido de filas seleccionadas
-  const totalDistribuido = selectedRowKeys.reduce<number>((s, k) => s + (montosPorFila[String(k)] || 0), 0);
+  // Calcular total distribuido de filas seleccionadas (en centavos enteros)
+  const totalDistribuido = sumarMontos(selectedRowKeys.map((k) => montosPorFila[String(k)] ?? 0));
 
   return (
     <Modal
@@ -587,13 +583,13 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
               step={0.01}
               precision={2}
               value={montoADistribuir}
-              onChange={(val) => setMontoADistribuir(val || 0)}
+              onChange={(val) => setMontoADistribuir(normalizarMonto(val ?? 0))}
             />
             <span style={{ marginLeft: 16, color: '#888' }}>
               Distribuido: {formatNumber(totalDistribuido)} |{' '}
               Disponible:{' '}
-              <span style={{ color: (montoADistribuir - totalDistribuido) < 0 ? '#ff4d4f' : '#52c41a' }}>
-                {formatNumber(Math.max(0, montoADistribuir - totalDistribuido))}
+              <span style={{ color: desdeCentavos(aCentavos(montoADistribuir) - aCentavos(totalDistribuido)) < 0 ? '#ff4d4f' : '#52c41a' }}>
+                {formatNumber(desdeCentavos(Math.max(0, aCentavos(montoADistribuir) - aCentavos(totalDistribuido))))}
               </span>
             </span>
           </Space>
@@ -621,7 +617,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       <Table
         dataSource={documentosFiltrados}
         columns={columnas}
-        rowKey={(r) => r.id}
+        rowKey={(r) => r.id ?? `${r.tipoDocumento ?? ''}-${r.numeroDocumento ?? ''}`}
         loading={loading}
         size="small"
         pagination={{ pageSize: 10, showSizeChanger: false }}

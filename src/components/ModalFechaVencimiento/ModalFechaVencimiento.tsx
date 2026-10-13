@@ -21,7 +21,6 @@ const ModalFechaVencimiento: React.FC<ModalFechaVencimientoProps> = ({ open, onC
     >
       <DatePicker
         style={{ width: '100%' }}
-        format="YYYY-MM-DD"
         onChange={onFechaChange}
       />
     </Modal>

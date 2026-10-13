@@ -21,11 +21,9 @@ export function getMonedaSucursalActiva(): { simbolo: string; nombre: string; co
   };
 }
 
-/** Catalogo MONEDAS de la sucursal activa, si ya fue descargado al iniciar sesion. */
-export function getMonedasCatalogo(sucursal?: number | null): MonedaDTO[] {
-  const suc = sucursal ?? useAuthStore.getState().sucursalActiva;
-  if (suc === null || suc === undefined) return [];
-  return useCompanyStore.getState().data.monedas[suc] ?? [];
+/** Catalogo MONEDAS global, si ya fue descargado al iniciar sesion. */
+export function getMonedasCatalogo(): MonedaDTO[] {
+  return useCompanyStore.getState().data.monedas ?? [];
 }
 
 /**

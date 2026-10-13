@@ -61,7 +61,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
   const [documentosRelacionados, setDocumentosRelacionados] = useState<DocumentoRelacionDTO[]>([]);
   const [modalAnularOpen, setModalAnularOpen] = useState(false);
   const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
-  const [pagosAsociados, setPagosAsociados] = useState<any[]>([]);
+  const [, setPagosAsociados] = useState<any[]>([]);
   const [operacionTitulo, setOperacionTitulo] = useState('');
   const [recalculando, setRecalculando] = useState(false);
   const monedaDefault = getMonedaSucursalActiva();
@@ -389,7 +389,6 @@ const FacturaSuplidorDetalle: React.FC = () => {
   const isLarge = screens.xxl === true;
   const estadoInfo = resolveEstado(documentoActivo.estado);
   const esCerrado = toPeriodoNum(documentoActivo.periodo) === 6;
-  const tienePagos = pagosAsociados.length > 0;
 
   // NOTA: el campo `pagado` de transaccionesAsociadas viene en 0; el monto realmente aplicado
   // (coincide con CTRANSAC.ACREDITADO) esta en `monto` (y opcionalmente `descuento`).
@@ -627,10 +626,10 @@ const FacturaSuplidorDetalle: React.FC = () => {
         }}
         onEditar={() => navigate(`/FRDE/${id}/editar`)}
         onAplicar={handleAplicar}
-        onAnular={tienePagos ? undefined : async () => setModalAnularOpen(true)}
+        onAnular={async () => setModalAnularOpen(true)}
         onPostear={data.concepto?.noAsientos ? undefined : handlePostear}
         onRevisado={handleRevisado}
-        onDesaplicar={tienePagos ? undefined : async () => setModalDesaplicarOpen(true)}
+        onDesaplicar={async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
         extraButtons={
           <>
@@ -797,7 +796,14 @@ const FacturaSuplidorDetalle: React.FC = () => {
           <Col xxl={6}>
             <EntidadCard entidad={documentoActivo.suplidor} entidadSecundaria={documentoActivo.entidad} fallbackTitulo="Suplidor" />
             <TotalesCard subTotal={documentoActivo.subTotal} descuento={documentoActivo.descuento} impuestos={documentoActivo.impuestos} retenciones={documentoActivo.retenciones ?? 0} total={documentoActivo.total} alignRight={false}
-              adorno={<AdornoDocumentoPagado total={documentoActivo.total} saldoPendiente={totalPendiente} />}
+                adorno={
+                  <AdornoDocumentoPagado
+                    total={documentoActivo.total}
+                    saldoPendiente={totalPendiente}
+                    documentosRelacionados={documentosRelacionados}
+                    idDocumento={documentoActivo.id}
+                  />
+                }
               pagado={totalPagado}
               pendiente={totalPendiente}
               monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
@@ -947,7 +953,14 @@ const FacturaSuplidorDetalle: React.FC = () => {
 
         <div style={{ marginTop: 24 }}>
           <TotalesCard subTotal={documentoActivo.subTotal} descuento={documentoActivo.descuento} impuestos={documentoActivo.impuestos} retenciones={documentoActivo.retenciones ?? 0} total={documentoActivo.total} alignRight={true}
-            adorno={<AdornoDocumentoPagado total={documentoActivo.total} saldoPendiente={totalPendiente} />}
+                adorno={
+                  <AdornoDocumentoPagado
+                    total={documentoActivo.total}
+                    saldoPendiente={totalPendiente}
+                    documentosRelacionados={documentosRelacionados}
+                    idDocumento={documentoActivo.id}
+                  />
+                }
               pagado={totalPagado}
               pendiente={totalPendiente}
               monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}

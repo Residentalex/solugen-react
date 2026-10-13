@@ -140,8 +140,10 @@ const TransaccionBancariaFormulario: React.FC = () => {
   const descuentoValue = Form.useWatch('descuento', form) ?? 0;
   const impuestosValue = Form.useWatch('impuestos', form) ?? 0;
   const retencionesValue = Form.useWatch('retenciones', form) ?? 0;
+  const totalValue = Form.useWatch('total', form) ?? 0;
   const refValue = Form.useWatch('referencia', form) || '';
   const tasaValue = Form.useWatch('tasa', form) ?? 1;
+  const beneficiarioValue = Form.useWatch('beneficiario', form);
 
   // ===== Moneda dinámica desde el concepto seleccionado =====
   const monedaSimbolo = selectedConcepto?.moneda?.simbolo || getMonedaSucursalActiva().simbolo;
@@ -180,6 +182,10 @@ const TransaccionBancariaFormulario: React.FC = () => {
     (sumaMontos + (impuestosValue || 0) - (retencionesValue || 0)) * 100
   ) / 100;
 
+  // Usar el total que el usuario escribió en el formulario, si lo hay;
+  // si no, caer al cálculo automático.
+  const totalUsuario = totalValue || totalCalculado;
+
   // ===== Cargar cuentas bancarias =====
   const cargarCuentasBancarias = useCallback(async () => {
     try {
@@ -190,12 +196,16 @@ const TransaccionBancariaFormulario: React.FC = () => {
     }
   }, [sucursalActiva, message]);
 
-  // ===== Cargar tipos de documento =====
+  // ===== Cargar tipos de documento (mismo mecanismo que RDocAplicado) =====
   const cargarTiposDocumento = useCallback(async () => {
     setLoadingTipos(true);
     try {
-      const result = await tipoApi.obtenerPorDocumento(sucursalActiva, 'TRB');
-      setTipoDocumentoOpciones(result || []);
+      const { data: resp } = await apiClient.get(`/Pantalla/${sucursalActiva}/modulo/7/documentos`);
+      const tipos = (resp?.data || []).map((d: any) => ({
+        codigo: d.codigo,
+        nombre: d.descripcion,
+      }));
+      setTipoDocumentoOpciones(tipos);
     } catch {
       message.error('Error al cargar tipos de documento');
     } finally {
@@ -252,7 +262,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
         impuestos: 0,
         retenciones: 0,
         beneficiario: '',
-        total: totalCalculado,
+      total: totalUsuario,
       });
     }
 
@@ -497,11 +507,20 @@ const TransaccionBancariaFormulario: React.FC = () => {
   // ===== Validación =====
   const validarFormulario = (): string | null => {
     if (!selectedConcepto) return 'Debe seleccionar un Concepto';
-    if (!selectedEntidad) return 'Debe seleccionar una Entidad';
-
+    
     const values = form.getFieldsValue();
     if (!values.cuentaBancaria) return 'Debe seleccionar una Cuenta Bancaria';
     if (subTotalValue < 0) return 'SubTotal no puede ser negativo';
+
+    const conceptoTieneEntidades = selectedConcepto.Entidades?.length > 0;
+    
+    if (conceptoTieneEntidades) {
+      // Concept works with entity types: need entity OR beneficiario
+      if (!selectedEntidad && !beneficiarioValue) return 'Debe seleccionar una Entidad o ingresar un Beneficiario';
+    } else {
+      // Concept does NOT work with entity types: entity not needed, but beneficiario is required
+      if (!beneficiarioValue) return 'Debe ingresar un Beneficiario';
+    }
 
     return null;
   };
@@ -531,7 +550,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
       descuento: sumaDescuentos,
       impuestos: impuestosValue,
       retenciones: retencionesValue,
-      total: totalCalculado,
+      total: form.getFieldValue('total') ?? 0,
       tasa: tasaValue,
       nombreBeneficiario: values.beneficiario || undefined,
       codigoMoneda: codigoMonedaDocumento,
@@ -812,7 +831,6 @@ const TransaccionBancariaFormulario: React.FC = () => {
               <FloatingField label="Fecha" required>
                 <DatePicker
                   style={{ width: '100%' }}
-                  format="YYYY-MM-DD"
                   disabledDate={(current) => {
                     if (!current) return false;
                     if ((data as any)?.documento?.fechaPermitida === 'MenorIgualFechaDia') {
@@ -830,44 +848,34 @@ const TransaccionBancariaFormulario: React.FC = () => {
           </Col>
 
           <Col xs={24} sm={12}>
-            <Form.Item name="entidad" key={selectedConcepto?.codigo || 'empty'} required style={{ marginBottom: 0 }}>
-              <FloatingField label="Entidad" required>
-                {mode === 'editar' && data?.nombreEntidad ? (
-                  <Text style={{ padding: '4px 12px', display: 'block', lineHeight: '32px', background: '#f5f5f5', borderRadius: 4 }}>
-                    {toTitleCase(data.nombreEntidad)}
-                  </Text>
-                ) : mode === 'editar' && selectedEntidad ? (
-                  <Text style={{ padding: '4px 12px', display: 'block', lineHeight: '32px', background: '#f5f5f5', borderRadius: 4 }}>
-                    {toTitleCase(selectedEntidad.nombre)} ({selectedEntidad.codigo})
-                  </Text>
-                ) : (
-                  <Select
-                    allowClear
-                    showSearch
-                    optionFilterProp="label"
-                    notFoundContent={!selectedConcepto ? 'Seleccione un concepto primero' : (entidadesCache.length === 0 ? 'No hay entidades disponibles' : undefined)}
-                    onChange={(val) => {
-                      const ent = entidadesCache.find((e: any) => e.codigo === val);
-                      setSelectedEntidad(ent || null);
-                    }}
-                    onDropdownVisibleChange={(open) => {
-                      if (open && !selectedConcepto) {
-                        message.info('Seleccione un concepto primero');
-                      }
-                    }}
-                  >
-                    {entidadesCache.map((ent: any) => (
-                      <Select.Option
-                        key={ent.codigo}
-                        value={ent.codigo}
-                        label={toTitleCase(ent.nombre) + (ent.identificacion ? ` (${ent.identificacion})` : '')}
-                      >
-                        {toTitleCase(ent.nombre)}
-                        {ent.identificacion ? ` (${ent.identificacion})` : ''}
-                      </Select.Option>
-                    ))}
-                  </Select>
-                )}
+            <Form.Item name="entidad" key={selectedConcepto?.codigo || 'empty'} style={{ marginBottom: 0 }}>
+              <FloatingField label="Entidad">
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  notFoundContent={!selectedConcepto ? 'Seleccione un concepto primero' : (entidadesCache.length === 0 ? 'No hay entidades disponibles' : undefined)}
+                  onChange={(val) => {
+                    const ent = entidadesCache.find((e: any) => e.codigo === val);
+                    setSelectedEntidad(ent || null);
+                  }}
+                  onDropdownVisibleChange={(open) => {
+                    if (open && !selectedConcepto) {
+                      message.info('Seleccione un concepto primero');
+                    }
+                  }}
+                >
+                  {entidadesCache.map((ent: any) => (
+                    <Select.Option
+                      key={ent.codigo}
+                      value={ent.codigo}
+                      label={toTitleCase(ent.nombre) + (ent.identificacion ? ` (${ent.identificacion})` : '')}
+                    >
+                      {toTitleCase(ent.nombre)}
+                      {ent.identificacion ? ` (${ent.identificacion})` : ''}
+                    </Select.Option>
+                  ))}
+                </Select>
               </FloatingField>
             </Form.Item>
           </Col>
