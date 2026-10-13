@@ -256,9 +256,16 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
         let restanteCentavos = aCentavos(montoTotal || 0);
 
         if (documentosIniciales && documentosIniciales.length > 0) {
-          // Precargar selección y montos desde documentosIniciales
-          setSelectedRowKeys(documentosIniciales);
-          (documentosIniciales || []).forEach((id) => {
+          // Precargar selección y montos desde documentosIniciales.
+          // Excluir documentos con saldo a favor (abonado > total): no seleccionables.
+          const iniciales = documentosIniciales.filter((id) => {
+            const doc = docs.find((d: any) => d.id === id);
+            if (!doc) return false;
+            const { montoOriginal, pagado } = _obtenerMontosFinancieros(doc);
+            return pagado <= montoOriginal;
+          });
+          setSelectedRowKeys(iniciales);
+          iniciales.forEach((id) => {
             const doc = docs.find((d: any) => d.id === id);
             if (!doc) return;
             const pendienteReal = _obtenerPendienteReal(doc);
@@ -359,7 +366,15 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       keys.filter((k) => clavesConAsociado.has(k) && !clavesBloqueadas.has(k))
     );
 
-    const keysValidas = keys.filter((k) => !clavesConAsociadoSinAviso.has(k) && !clavesBloqueadas.has(k));
+    // Filas con saldo a favor (abonado > total) → no permitir selección
+    const clavesSaldoAFavor = new Set(keys.filter((k) => {
+      const doc = documentos.find((d) => d.id === k);
+      if (!doc) return false;
+      const { montoOriginal, pagado } = _obtenerMontosFinancieros(doc);
+      return pagado > montoOriginal;
+    }));
+
+    const keysValidas = keys.filter((k) => !clavesConAsociadoSinAviso.has(k) && !clavesBloqueadas.has(k) && !clavesSaldoAFavor.has(k));
 
     setMontosPorFila((prev) => {
       const nuevos = { ...prev };
@@ -475,7 +490,14 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
     },
     {
       title: 'Saldo Pendiente', key: 'saldo', width: 120, align: 'right' as const,
-      render: (_: any, r: any) => <strong>{formatNumber(calcularPendienteDocumento(r))}</strong>,
+      render: (_: any, r: any) => {
+        const { montoOriginal, pagado } = _obtenerMontosFinancieros(r);
+        // Abonado mayor al total → saldo a favor: pendiente en negativo y no seleccionable
+        const pendiente = pagado > montoOriginal
+          ? normalizarMonto(montoOriginal - pagado)
+          : calcularPendienteDocumento(r);
+        return <strong>{formatNumber(pendiente)}</strong>;
+      },
     },
     {
       title: 'Doc. Asociado',
@@ -624,6 +646,10 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
         rowSelection={{
           selectedRowKeys,
           onChange: handleSelectionChange,
+          getCheckboxProps: (record: any) => {
+            const { montoOriginal, pagado } = _obtenerMontosFinancieros(record);
+            return { disabled: pagado > montoOriginal };
+          },
         }}
         scroll={{ x: 1200 }}
       />
