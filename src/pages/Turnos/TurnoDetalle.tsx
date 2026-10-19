@@ -725,7 +725,7 @@ const [costosSearch, setCostosSearch] = useState('');
     (c.tarjetaCredito || 0) + (c.tarjetaDebito || 0) + (c.bono || 0) +
     (c.tarjetaRegalo || 0) + (c.notaCredito || 0), 0) ?? 0;
 const total = data?.total ?? 0;
-  const porCobrar = total - cobrado;
+  const porCobrar = Math.round((total - cobrado) * 100) / 100;
 
   // Resumen de impuestos por tipo (I=Impuesto, L=Liquidación, V=Informativo, R=Retención)
   const impuestosTotales: Record<string, number> = React.useMemo(() => {
@@ -1003,6 +1003,7 @@ const total = data?.total ?? 0;
 
   const loading = isLoading;
   const loadingError = isError;
+  const mensajeError = (error as any)?.response?.data?.errorMessage || 'Error al cargar detalle del turno';
 
   const documentosFiltrados = React.useMemo(() => {
     let result = data?.facturas || [];
@@ -1165,7 +1166,7 @@ const total = data?.total ?? 0;
     return (
       <div>
         <Alert
-          message="Error al cargar detalle del turno"
+          message={mensajeError}
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
@@ -1782,7 +1783,7 @@ const tabsItems = [
 `}</style>
       {loadingError && (
         <Alert
-          message="Error al cargar detalle del turno"
+          message={mensajeError}
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
