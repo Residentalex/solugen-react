@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 import type { ApiResponse } from '../types/auth';
-import type { VisanetCierreDTO, VisanetResponseDTO, VisanetTurnoVoucherDTO, VisanetVoucherDTO } from '../types/visanet';
+import type { VisanetCerrarLoteResultadoDTO, VisanetCierreDTO, VisanetCierreGuardadoDTO, VisanetResponseDTO, VisanetTurnoVoucherDTO, VisanetVoucherDTO } from '../types/visanet';
 
 const BASE = '/visanet';
 
@@ -20,11 +20,22 @@ export const visanetApi = {
     return data.data;
   },
 
-  cerrarLote: async (sucursal: number, ipTerminal?: string, puertoTerminal?: number): Promise<string> => {
-    const { data } = await apiClient.post<ApiResponse<string>>(`${BASE}/${sucursal}/cerrar-lote`, {
+  cerrarLote: async (sucursal: number, ipTerminal?: string, puertoTerminal?: number): Promise<VisanetCerrarLoteResultadoDTO> => {
+    const { data } = await apiClient.post<ApiResponse<VisanetCerrarLoteResultadoDTO>>(`${BASE}/${sucursal}/cerrar-lote`, {
       ...(ipTerminal ? { ipTerminal } : {}),
       ...(puertoTerminal ? { puertoTerminal } : {}),
     });
+    return data.data;
+  },
+
+  obtenerCierres: async (sucursal: number, fecha?: string): Promise<VisanetCierreGuardadoDTO[]> => {
+    const params = fecha ? `?fecha=${fecha}` : '';
+    const { data } = await apiClient.get<ApiResponse<VisanetCierreGuardadoDTO[]>>(`${BASE}/${sucursal}/cierres${params}`);
+    return data.data;
+  },
+
+  obtenerCierre: async (sucursal: number, id: number): Promise<VisanetCierreGuardadoDTO> => {
+    const { data } = await apiClient.get<ApiResponse<VisanetCierreGuardadoDTO>>(`${BASE}/${sucursal}/cierres/${id}`);
     return data.data;
   },
 

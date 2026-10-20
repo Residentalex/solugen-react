@@ -11,6 +11,9 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { visanetApi } from '../../api/visanetApi';
 import type {
   VisanetCierreDTO,
+  VisanetCierreDetalleDTO,
+  VisanetCierreGuardadoDTO,
+  VisanetCierreImpresionDTO,
   VisanetCierrePruebaRespuestaDTO,
   VisanetResponseDTO,
   VisanetVoucherDTO,
@@ -112,12 +115,13 @@ const SUBSIDIO_NOMBRES: Record<string, string> = {
  * (T12:00:00) para que formatFechaCorta no corra el día por zona horaria (UTC-4).
  */
 const conFechaTransaccion = (res: VisanetResponseDTO): VisanetResponseDTO => {
-  if (res.transactionDate) return res;
-  const hoy = new Date();
-  return {
-    ...res,
-    transactionDate: `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}T12:00:00`,
-  };
+  if (res.transactionDate && res.transactionTime) return res;
+  const ahora = new Date();
+  const fecha = res.transactionDate
+    || `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-${String(ahora.getDate()).padStart(2, '0')}T12:00:00`;
+  const hora = res.transactionTime
+    || `${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}:${String(ahora.getSeconds()).padStart(2, '0')}`;
+  return { ...res, transactionDate: fecha, transactionTime: hora };
 };
 
 /**
@@ -155,18 +159,129 @@ const labelOperacionVoucher = (tipoOp: TipoOpVoucher, subsidyIdParam?: string): 
   return SUBSIDIO_NOMBRES[subsidyIdParam ?? ''] || 'SUBSIDIO';
 };
 
+/** El host del cierre es el issuerName tal como lo devuelve el terminal. */
+const marcaCierre = (valor?: string): string =>
+  String(valor ?? '').trim().toUpperCase() || 'SIN MARCA';
+
+const loteCierre = (valor?: string | number): string => {
+  const texto = String(valor ?? '').trim();
+  return /^\d+$/.test(texto) ? texto.padStart(3, '0') : texto;
+};
+
+const fechaCierreCorta = (valor?: string): string => {
+  const texto = String(valor ?? '').trim();
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(texto);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1].slice(2)}`;
+  const dmy = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(texto);
+  if (dmy) return `${dmy[1]}/${dmy[2]}/${dmy[3].slice(2)}`;
+  return texto;
+};
+
+const panCierre = (valor?: string): string => {
+  const limpio = String(valor ?? '').replace(/[^0-9Xx]/g, '');
+  const digitos = limpio.replace(/\D/g, '');
+  const primero = limpio[0] || digitos[0] || 'X';
+  const ultimos = (digitos.slice(-4) || limpio.slice(-4) || '****').padStart(4, '*');
+  return `${primero}XXX XXXX XXXX ${ultimos}`;
+};
+
+const montoCierre = (valor: number): string => valor.toFixed(2);
+
+const montoCierreTotal = (valor: number): string =>
+  valor.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 /**
- * Convierte la respuesta cruda del cierre de lote (string JSON del terminal)
- * al shape que espera la plantilla VSNT_CIERRE. Las claves del terminal
- * (batchNumber, merchantId, transactionDate, etc.) coinciden con el DTO.
- * Si el terminal no devolvió JSON válido, se conserva el texto como mensaje.
+ * Aplana la respuesta CLOSE (o el shape que arma vouchers-cierre) a una lista
+ * de filas que imprime la plantilla VSNT_CIERRE, con cabecera por host/lote.
  */
-const parseCierre = (raw: string): VisanetResponseDTO => {
+const construirCierreImpresion = (
+  acquirers: Array<{ acquirerName?: string; batchNumber?: string | number; data?: any[] }> | undefined,
+  base: Record<string, any> = {},
+): VisanetCierreImpresionDTO => {
+  const detalle: VisanetCierreDetalleDTO[] = [];
+  let merchantId = String(base.merchantId ?? '');
+  let terminalId = String(base.terminalId ?? '');
+  let primeraFecha = '';
+
+  (acquirers ?? []).forEach((acquirer) => {
+    const items = Array.isArray(acquirer?.data) ? acquirer.data : [];
+    if (items.length === 0) return;
+
+    const lote = loteCierre(acquirer.batchNumber ?? items[0]?.batchNumber);
+    const host = marcaCierre(items[0]?.issuerName || items[0]?.acquirerName || acquirer.acquirerName);
+
+    items.forEach((item, indice) => {
+      // El PAX envia los montos en centavos (1500 = 15.00).
+      const monto = (Number(item.totalAmount) || 0) / 100;
+      const anulada = String(item.transactionName ?? '').toUpperCase().includes('VOID') || monto < 0;
+      const fechaTexto = String(item.transactionDate ?? item.datetime ?? '');
+      const horaTexto = String(item.transactionTime ?? String(item.datetime ?? '').split(' ')[1] ?? '');
+      const marca = marcaCierre(item.issuerName || item.acquirerName || host);
+
+      detalle.push({
+        host,
+        lote,
+        ref: String(indice + 1).padStart(6, '0'),
+        pan: panCierre(item.panMasked || item.pan),
+        marca,
+        approval: String(item.approval || item.authorization || ''),
+        fecha: fechaCierreCorta(fechaTexto),
+        hora: horaTexto,
+        tipo: anulada ? 'VENTA ANULADA' : 'VENTA NORMAL',
+        monto,
+        montoTexto: montoCierre(monto),
+        primerodelGrupo: indice === 0 ? 1 : 0,
+        ultimodelGrupo: indice === items.length - 1 ? 1 : 0,
+      });
+
+      if (!merchantId && item.merchantId) merchantId = String(item.merchantId);
+      if (!terminalId && item.terminalId) terminalId = String(item.terminalId);
+      if (!primeraFecha && fechaTexto) primeraFecha = fechaTexto;
+    });
+  });
+
+  const anulaciones = detalle.filter((d) => d.tipo === 'VENTA ANULADA');
+  // Ventas suma todas las transacciones (incluidas las anuladas) en valor absoluto.
+  const ventasMonto = detalle.reduce((total, d) => total + Math.abs(d.monto), 0);
+  const anulacionesMonto = anulaciones.reduce((total, d) => total + d.monto, 0);
+  const totalMonto = ventasMonto + anulacionesMonto;
+  // Ventas cuenta todas las transacciones, incluidas las que luego se anularon.
+  const ventasCantidad = detalle.length;
+
+  return {
+    exitoso: true,
+    detalle,
+    ventasCantidad,
+    ventasMonto,
+    ventasMontoTexto: montoCierreTotal(ventasMonto),
+    anulacionesCantidad: anulaciones.length,
+    anulacionesMonto,
+    anulacionesMontoTexto: montoCierreTotal(anulacionesMonto),
+    totalCantidad: ventasCantidad - anulaciones.length,
+    totalMonto,
+    totalMontoTexto: montoCierreTotal(totalMonto),
+    fechaCierre: fechaCierreCorta(primeraFecha) || fechaCierreCorta(new Date().toISOString()),
+    merchantId,
+    terminalId,
+  };
+};
+
+/**
+ * Convierte la respuesta cruda del cierre de lote al shape que espera la
+ * plantilla VSNT_CIERRE. Si el terminal no devolvió JSON válido, conserva el
+ * texto como mensaje.
+ */
+const parseCierre = (raw: unknown): VisanetCierreImpresionDTO => {
   try {
-    const datos = JSON.parse(raw);
-    return { exitoso: true, ...(datos && typeof datos === 'object' ? datos : {}) };
+    const datos = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    const base = datos && typeof datos === 'object' ? (datos as Record<string, any>) : {};
+    return { ...base, ...construirCierreImpresion(base.acquirers, base) };
   } catch {
-    return { exitoso: true, mensajeRespuesta: raw };
+    return {
+      exitoso: true,
+      mensajeRespuesta: typeof raw === 'string' ? raw : '',
+      ...construirCierreImpresion([], {}),
+    };
   }
 };
 
@@ -244,6 +359,13 @@ const VisanetTest: React.FC = () => {
   const [obteniendoCierre, setObteniendoCierre] = useState(false);
   const [imprimiendoCierre, setImprimiendoCierre] = useState(false);
 
+  // Cierres guardados (CIERRES_VISANET) para reimprimir sin recalcular
+  const [cierresGuardados, setCierresGuardados] = useState<VisanetCierreGuardadoDTO[]>([]);
+  const [cierresLoading, setCierresLoading] = useState(false);
+  const [reimprimiendoCierreId, setReimprimiendoCierreId] = useState<number | null>(null);
+  const [cierreGuardadoJsonOpen, setCierreGuardadoJsonOpen] = useState(false);
+  const [cierreGuardadoJson, setCierreGuardadoJson] = useState('');
+
   // Estado del modal voucher
   const [voucherVisible, setVoucherVisible] = useState(false);
 
@@ -314,10 +436,25 @@ const VisanetTest: React.FC = () => {
     }
   }, [sucursalActiva]);
 
+  // Carga los cierres guardados del día (GET /visanet/{sucursal}/cierres?fecha=yyyy-MM-dd)
+  const cargarCierresGuardados = useCallback(async (fecha?: dayjs.Dayjs) => {
+    setCierresLoading(true);
+    try {
+      const fechaParam = (fecha ?? dayjs()).format('YYYY-MM-DD');
+      const data = await visanetApi.obtenerCierres(sucursalActiva, fechaParam);
+      setCierresGuardados(data || []);
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Error al cargar los cierres guardados');
+    } finally {
+      setCierresLoading(false);
+    }
+  }, [sucursalActiva]);
+
   // Cargar registros del día al montar
   useEffect(() => {
     cargarVouchersDelDia(dayjs());
-  }, [cargarVouchersDelDia]);
+    void cargarCierresGuardados(dayjs());
+  }, [cargarVouchersDelDia, cargarCierresGuardados]);
 
   // Handlers
   const ejecutarVenta = async (montoPesosParam: number, tokenECRParam?: string): Promise<boolean> => {
@@ -637,11 +774,25 @@ const VisanetTest: React.FC = () => {
     setResultado(null);
     try {
       const res = await visanetApi.cerrarLote(sucursalActiva);
-      setResultado(res);
+      const cierre = parseCierre(res.respuestaECRT);
+      setResultado(cierre);
       setTipoResultado('cierre');
-      await cargarVouchersDelDia(dayjs());
+      await Promise.all([
+        cargarVouchersDelDia(dayjs()),
+        cargarCierresGuardados(dayjs()),
+      ]);
+
+      if (res.vouchersMarcados > 0) {
+        message.success(`${res.vouchersMarcados} voucher(s) marcados como cerrados`);
+      } else if (res.errorMarcado) {
+        message.warning(`Cierre realizado, pero no se pudieron marcar los vouchers: ${res.errorMarcado}`);
+      }
+      if (res.errorGuardado) {
+        message.warning(`Cierre realizado, pero no se pudo guardar: ${res.errorGuardado}`);
+      }
+
       // Imprime el comprobante de cierre de lote con su plantilla (VSNT_CIERRE)
-      await imprimirVoucherConDatos('cierre', parseCierre(res), 0);
+      await imprimirVoucherConDatos('cierre', cierre, 0);
       setCerrarLoteModalOpen(false);
     } catch (err: any) {
       setError(err?.response?.data?.errorMessage || err.message || 'Error al cerrar lote');
@@ -704,6 +855,12 @@ const VisanetTest: React.FC = () => {
       simMoneda,
       sucursalName,
       subsidioLabel: labelOperacionVoucher(tipoOp, subsidyIdParam),
+      compania: companyInfo.nombre,
+      direccion: companyInfo.direccion,
+      telefono: companyInfo.telefono,
+      rnc: companyInfo.rnc,
+      fax: companyInfo.fax,
+      slogan: companyInfo.slogan,
       sucursal: {
         nombre: companyInfo.nombre,
         direccion: companyInfo.direccion,
@@ -951,6 +1108,67 @@ const VisanetTest: React.FC = () => {
     },
   ];
 
+  const columnasCierresGuardados: ColumnsType<VisanetCierreGuardadoDTO> = [
+    { title: 'NOSEC', dataIndex: 'noSec', key: 'noSec', width: 130 },
+    {
+      title: 'Fecha',
+      dataIndex: 'fecha',
+      key: 'fecha',
+      width: 150,
+      render: (fecha: string) => (fecha ? dayjs(fecha).format('DD/MM/YYYY HH:mm') : '-'),
+    },
+    { title: 'Host', dataIndex: 'host', key: 'host', width: 120, render: (host: string) => host || '-' },
+    { title: 'Lote', dataIndex: 'batchNumber', key: 'batchNumber', width: 80 },
+    {
+      title: 'Ventas',
+      key: 'ventas',
+      width: 160,
+      align: 'right',
+      render: (_, record) => `${record.cantVentas} / ${simMoneda} ${Number(record.montoVentas || 0).toFixed(2)}`,
+    },
+    {
+      title: 'Anulaciones',
+      key: 'anulaciones',
+      width: 170,
+      align: 'right',
+      render: (_, record) => `${record.cantAnulaciones} / ${simMoneda} ${Number(record.montoAnulaciones || 0).toFixed(2)}`,
+    },
+    {
+      title: 'Total',
+      key: 'total',
+      width: 160,
+      align: 'right',
+      render: (_, record) => `${record.cantTotal} / ${simMoneda} ${Number(record.montoTotal || 0).toFixed(2)}`,
+    },
+    { title: 'Usuario', dataIndex: 'usuario', key: 'usuario', width: 120, ellipsis: true },
+    {
+      title: '',
+      key: 'acciones',
+      width: 90,
+      render: (_, record) => (
+        <Space size={0}>
+          <Button
+            type="link"
+            size="small"
+            icon={<PrinterOutlined />}
+            title="Reimprimir cierre guardado"
+            loading={reimprimiendoCierreId === record.id}
+            disabled={operacionEnProceso && reimprimiendoCierreId !== record.id}
+            onClick={() => handleReimprimirCierreGuardado(record)}
+          />
+          <Button
+            type="link"
+            size="small"
+            icon={<CodeOutlined />}
+            title="Ver JSON guardado"
+            disabled={operacionEnProceso}
+            onClick={() => handleVerJsonCierreGuardado(record)}
+          />
+        </Space>
+      ),
+    },
+  ];
+
   const handleVisualizarCierre = async () => {
     if (!vouchers.length) {
       message.info('No hay vouchers para la fecha seleccionada.');
@@ -1177,11 +1395,11 @@ const VisanetTest: React.FC = () => {
 
   // Convierte las filas planas de vouchers-cierre al shape acquirers[].data[] que
   // entiende la plantilla VSNT_CIERRE (mismo contrato que la respuesta CLOSE).
-  const mapearCierreParaPlantilla = (rows: VisanetCierreDTO[]): VisanetResponseDTO => {
+  const mapearCierreParaPlantilla = (rows: VisanetCierreDTO[]): VisanetCierreImpresionDTO => {
     const grupos = new Map<string, { host: string; lote: string; rows: VisanetCierreDTO[] }>();
     rows.forEach((row) => {
-      const host = row.host?.trim() || 'SIN HOST';
-      const lote = row.noLote?.trim() || 'SIN LOTE';
+      const host = marcaCierre(row.nTipoTC || row.host);
+      const lote = loteCierre(row.noLote);
       const clave = `${host}::${lote}`;
       const grupo = grupos.get(clave);
       if (grupo) {
@@ -1198,20 +1416,26 @@ const VisanetTest: React.FC = () => {
         const monto = Number(fila.monto || 0);
         const anulada = esAnulado(fila.anulado);
         return {
-          transactionName: anulada ? 'VOID' : 'SALE',
-          totalAmount: anulada ? -monto : monto,
-          transactionDate: fila.fecha?.slice(0, 10),
+          acquirerName: host,
+          issuerName: host,
+          transactionName: anulada ? 'TrxVoid' : 'TrxSale',
+          // El constructor del cierre interpreta totalAmount en centavos.
+          totalAmount: anulada ? -(monto * 100) : monto * 100,
+          transactionDate: fila.fecha ?? undefined,
           transactionTime: fila.hora,
           approval: fila.noAprob,
           authorization: fila.noAprob,
           rrn: fila.rrn,
           pan: fila.notarjeta,
+          panMasked: fila.notarjeta,
+          merchantId: fila.merchantId,
+          terminalId: fila.terminalId,
           batchNumber: lote,
         };
       }),
     }));
 
-    return { exitoso: true, acquirers } as VisanetResponseDTO;
+    return construirCierreImpresion(acquirers, { exitoso: true });
   };
 
   // Envía el cierre consultado a la impresora térmica usando la plantilla VSNT_CIERRE.
@@ -1229,6 +1453,48 @@ const VisanetTest: React.FC = () => {
     } finally {
       setImprimiendoCierre(false);
       finalizarOperacion();
+    }
+  };
+
+  const handleReimprimirCierreGuardado = async (registro: VisanetCierreGuardadoDTO) => {
+    if (!iniciarOperacion('reimprimirCierreGuardado', 'la reimpresion del cierre')) return;
+    setReimprimiendoCierreId(registro.id);
+    try {
+      const detalle = registro.respuestaJson
+        ? registro
+        : await visanetApi.obtenerCierre(sucursalActiva, registro.id);
+      if (!detalle?.respuestaJson) {
+        message.warning('El cierre guardado no tiene JSON para reimprimir.');
+        return;
+      }
+      await imprimirVoucherConDatos('cierre', parseCierre(detalle.respuestaJson), 0);
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'No se pudo reimprimir el cierre');
+    } finally {
+      setReimprimiendoCierreId(null);
+      finalizarOperacion();
+    }
+  };
+
+  const handleVerJsonCierreGuardado = async (registro: VisanetCierreGuardadoDTO) => {
+    try {
+      const detalle = registro.respuestaJson
+        ? registro
+        : await visanetApi.obtenerCierre(sucursalActiva, registro.id);
+      if (!detalle?.respuestaJson) {
+        message.warning('El cierre guardado no tiene JSON.');
+        return;
+      }
+      let texto = detalle.respuestaJson;
+      try {
+        texto = JSON.stringify(JSON.parse(texto), null, 2);
+      } catch {
+        // Se conserva el texto original si no es JSON.
+      }
+      setCierreGuardadoJson(texto);
+      setCierreGuardadoJsonOpen(true);
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'No se pudo obtener el JSON del cierre');
     }
   };
 
@@ -1462,7 +1728,10 @@ const VisanetTest: React.FC = () => {
               onChange={(date) => {
                 setFechaFiltro(date);
                 if (!iniciarOperacion('cargar', 'la carga de vouchers')) return;
-                void cargarVouchersDelDia(date ?? dayjs()).finally(() => finalizarOperacion());
+                void Promise.all([
+                  cargarVouchersDelDia(date ?? dayjs()),
+                  cargarCierresGuardados(date ?? dayjs()),
+                ]).finally(() => finalizarOperacion());
               }}
               format="DD/MM/YYYY"
               style={{ width: 140, maxWidth: '100%' }}
@@ -1483,7 +1752,7 @@ const VisanetTest: React.FC = () => {
               disabled={operacionEnProceso}
               onClick={handleObtenerCierre}
             >
-              Cierre → JSON
+              Cierre por vouchers
             </Button>
             <Tooltip title="Exportar a Excel">
               <Button
@@ -1498,7 +1767,10 @@ const VisanetTest: React.FC = () => {
                 disabled={operacionEnProceso}
                 onClick={() => {
                   if (!iniciarOperacion('actualizar', 'la actualizacion de vouchers')) return;
-                  void cargarVouchersDelDia(fechaFiltro ?? dayjs()).finally(() => finalizarOperacion());
+                  void Promise.all([
+                    cargarVouchersDelDia(fechaFiltro ?? dayjs()),
+                    cargarCierresGuardados(fechaFiltro ?? dayjs()),
+                  ]).finally(() => finalizarOperacion());
                 }}
               />
             </Tooltip>
@@ -1514,6 +1786,39 @@ const VisanetTest: React.FC = () => {
           scroll={{ x: 1350 }}
           pagination={{ showTotal: (t) => `${t} registros` }}
           rowClassName={(record) => (esAnulado(record.anulado) ? 'paces-text-secondary' : '')}
+        />
+      </Card>
+
+      <Card
+        className="paces-card-erp"
+        title="Cierres guardados"
+        style={{ borderRadius: 8, overflow: 'hidden', marginTop: 16 }}
+        styles={{ body: { padding: 0 } }}
+      >
+        <div style={{ padding: '16px 24px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
+            <span className="paces-text-secondary">
+              Cierres de lote guardados para la fecha seleccionada. Reimprime directamente desde el JSON del terminal.
+            </span>
+            <div style={{ flex: 1 }} />
+            <Tooltip title="Actualizar cierres guardados">
+              <Button
+                icon={<ReloadOutlined />}
+                disabled={operacionEnProceso}
+                onClick={() => void cargarCierresGuardados(fechaFiltro ?? dayjs())}
+              />
+            </Tooltip>
+          </div>
+        </div>
+        <Table
+          rowKey="id"
+          className="paces-border-top paces-list-table"
+          size="middle"
+          columns={columnasCierresGuardados}
+          dataSource={cierresGuardados}
+          loading={cierresLoading}
+          scroll={{ x: 1100 }}
+          pagination={{ showTotal: (t) => `${t} registros` }}
         />
       </Card>
 
@@ -1893,6 +2198,29 @@ const VisanetTest: React.FC = () => {
           }}
         >
           {jsonCierreTexto()}
+        </pre>
+      </Drawer>
+
+      {/* JSON del cierre guardado en CIERRES_VISANET */}
+      <Drawer
+        title="JSON del cierre guardado"
+        open={cierreGuardadoJsonOpen}
+        onClose={() => setCierreGuardadoJsonOpen(false)}
+        width="min(560px, 100vw)"
+      >
+        <pre
+          style={{
+            maxHeight: 'calc(100vh - 160px)',
+            overflow: 'auto',
+            background: token.colorFillTertiary,
+            color: token.colorText,
+            padding: 12,
+            borderRadius: 4,
+            fontSize: 12,
+            margin: 0,
+          }}
+        >
+          {cierreGuardadoJson}
         </pre>
       </Drawer>
     </div>

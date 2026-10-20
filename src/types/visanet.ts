@@ -42,6 +42,13 @@ export interface VisanetVoucherInputDTO extends VisanetResponseDTO {
   subsidioLabel: string;
   /** Datos de la empresa inyectados en el JSON de impresion (el backend descarta el objeto `company` del payload). */
   sucursal?: CompanyInfo;
+  /** Campos planos que resuelven CAMPO:COMPANIA/DIRECCION/TELEFONO/RNC/FAX/SLOGAN en el agente. */
+  compania?: string;
+  direccion?: string;
+  telefono?: string;
+  rnc?: string;
+  fax?: string;
+  slogan?: string;
 }
 
 export interface VisanetResponseDTO {
@@ -83,9 +90,77 @@ export interface VisanetCierreDTO {
   hanulacion?: string;
   noLote?: string;
   host?: string;
+  nTipoTC?: string;
+  tipoTC?: string;
+  merchantId?: string;
+  terminalId?: string;
   notarjeta?: string;
   noAprob?: string;
   rrn?: string;
+}
+
+/** Fila aplanada que imprime la plantilla VSNT_CIERRE. */
+export interface VisanetCierreDetalleDTO {
+  host: string;
+  lote: string;
+  ref: string;
+  pan: string;
+  marca: string;
+  approval: string;
+  fecha: string;
+  hora: string;
+  tipo: string;
+  monto: number;
+  montoTexto: string;
+  primerodelGrupo: number;
+  ultimodelGrupo: number;
+}
+
+/** Datos del cierre ya preparados para la plantilla VSNT_CIERRE. */
+export interface VisanetCierreImpresionDTO extends VisanetResponseDTO {
+  detalle: VisanetCierreDetalleDTO[];
+  ventasCantidad: number;
+  ventasMonto: number;
+  ventasMontoTexto: string;
+  anulacionesCantidad: number;
+  anulacionesMonto: number;
+  anulacionesMontoTexto: string;
+  totalCantidad: number;
+  totalMonto: number;
+  totalMontoTexto: string;
+  fechaCierre: string;
+}
+
+/** Cierre guardado en CIERRES_VISANET. */
+export interface VisanetCierreGuardadoDTO {
+  id: number;
+  noSec: string;
+  fecha: string;
+  usuario?: string;
+  host?: string;
+  batchNumber?: string;
+  processingHost?: number | null;
+  merchantId?: string;
+  terminalId?: string;
+  cantVentas: number;
+  montoVentas: number;
+  cantAnulaciones: number;
+  montoAnulaciones: number;
+  cantTotal: number;
+  montoTotal: number;
+  respuestaCod?: string;
+  respuestaMsg?: string;
+  respuestaJson?: string | null;
+  creadoEn?: string;
+}
+
+/** Respuesta de POST /visanet/{sucursal}/cerrar-lote. */
+export interface VisanetCerrarLoteResultadoDTO {
+  respuestaECRT: string | VisanetCierrePruebaRespuestaDTO;
+  vouchersMarcados: number;
+  errorMarcado?: string | null;
+  cierre?: VisanetCierreGuardadoDTO | null;
+  errorGuardado?: string | null;
 }
 
 /** Respuesta de CLOSE usada exclusivamente para la vista de prueba del cierre. */
@@ -93,10 +168,12 @@ export interface VisanetCierrePruebaTransaccionDTO {
   datetime?: string;
   approval?: string;
   acquirerName?: string;
+  issuerName?: string;
   transactionName?: string;
   authorization?: string;
   rrn?: string;
   pan?: string;
+  panMasked?: string;
   totalAmount?: number;
   batchNumber?: string;
   merchantId?: string;

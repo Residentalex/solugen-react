@@ -1517,24 +1517,28 @@ export function formatTicketPOS(data: any, company?: CompanyInfo, config?: Plant
 
       switch (clave) {
         case 'CODIGO_QR': {
-          _aplicarFmt(ctx, fmtOv);
           const qrRender = renderCampoFPV(clave, data, lblOv, fmtOv, width, linea.tabular, linea.mostrarLabel, fmtLabel, fmtValor, linea.ruta, undefined, undefined, undefined, sepEtiqueta, linea);
-          if (qrRender) ctx.p.push(qrRender);
-          _restaurarFmt(ctx, fmtOv);
-          ctx.p.push(CMD_INIT + CMD_NORMALIZAR); // Resetear impresora despues del QR (evita corrupcion de estado)
-          ctx.al = 'left'; ctx.bo = false; ctx.co = false; // Sincronizar Ctx
+          if (qrRender) {
+            _aplicarFmt(ctx, fmtOv);
+            ctx.p.push(qrRender);
+            _restaurarFmt(ctx, fmtOv);
+            ctx.p.push(CMD_INIT + CMD_NORMALIZAR); // Resetear impresora despues del QR (evita corrupcion de estado)
+            ctx.al = 'left'; ctx.bo = false; ctx.co = false; // Sincronizar Ctx
+          }
           break;
         }
         case 'CODIGO_BARRAS': {
-          // Aplicar alineacion (por defecto centrado) antes del barcode; el barcode
-          // no lleva formato de texto, pero si respeta la alineacion de la linea.
-          const fmtBc = { ...(fmtOv || {}), alineacion: (fmtOv?.alineacion as any) || 'centro' } as FormatoItemTicket;
-          _aplicarFmt(ctx, fmtBc);
           const bcRender = renderCampoFPV(clave, data, lblOv, fmtOv, width, linea.tabular, linea.mostrarLabel, fmtLabel, fmtValor, linea.ruta, linea.tipoBarcode, undefined, undefined, sepEtiqueta, linea);
-          if (bcRender) ctx.p.push(bcRender);
-          _restaurarFmt(ctx, fmtOv);
-          ctx.p.push(CMD_INIT + CMD_NORMALIZAR); // Resetear impresora despues del barcode
-          ctx.al = 'left'; ctx.bo = false; ctx.co = false; // Sincronizar Ctx
+          if (bcRender) {
+            // Aplicar alineacion (por defecto centrado) antes del barcode; el barcode
+            // no lleva formato de texto, pero si respeta la alineacion de la linea.
+            const fmtBc = { ...(fmtOv || {}), alineacion: (fmtOv?.alineacion as any) || 'centro' } as FormatoItemTicket;
+            _aplicarFmt(ctx, fmtBc);
+            ctx.p.push(bcRender);
+            _restaurarFmt(ctx, fmtOv);
+            ctx.p.push(CMD_INIT + CMD_NORMALIZAR); // Resetear impresora despues del barcode
+            ctx.al = 'left'; ctx.bo = false; ctx.co = false; // Sincronizar Ctx
+          }
           break;
         }
         default: {
@@ -3138,6 +3142,13 @@ function formatoVoucherZonas(data: any, company: CompanyInfo | undefined, cfg: P
   }
 
   function emitirLineaContenido(linea: LineaZonaConfig, enGrupo?: boolean) {
+    if (linea.condicion && linea.condicion.trim()) {
+      try {
+        if (!evaluarExpresion(linea.condicion, { data, company, item: filaActual ?? undefined })) return;
+      } catch {
+        // Si la condicion falla se emite la linea (retrocompatibilidad).
+      }
+    }
     if (linea.ref === 'SEPARADOR') { _emitirSep(ctx, linea); return; }
     if (linea.ref === 'ESPACIO') { _emitirEspacio(ctx); return; }
     if (linea.ref.startsWith('LIBRE:') || linea.ref.startsWith('DTO:') || linea.ref.startsWith('FIRMA:')) {

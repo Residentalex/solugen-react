@@ -173,24 +173,25 @@ const datosEjemploAnulacion = {
   subsidioLabel: 'ANULACION',
 };
 const datosEjemploCierre = {
-  merchantId: '0000002107391001',
-  transactionDate: '2026-08-02T15:30:00',
-  issuerName: 'BANCO DEMO',
+  merchantId: '000000167391000006575',
+  terminalId: '',
+  fechaCierre: '29/11/23',
   exitoso: true,
-  simMoneda: 'RD$',
-  montoPesos: 0,
-  sucursalName: 'SUCURSAL CENTRAL',
-  subsidioLabel: 'CIERRE DE LOTE',
-  panMasked: '',
-  cardHolderName: '',
-  rrn: '',
-  batchNumber: '001',
-  terminalId: 'TERM001',
-  processingHost: 'HOST DEMO',
-  stan: '',
-  entryMode: '',
-  exchangeRate: 1,
-  transactionCurrency: 'DOP',
+  detalle: [
+    { host: 'VISA', lote: '015', ref: '000001', pan: '4XXX XXXX XXXX 8513', marca: 'VISA', approval: '520975', fecha: '29/11/23', hora: '17:04:41', tipo: 'VENTA NORMAL', monto: 100, montoTexto: '100.00', primerodelGrupo: 1, ultimodelGrupo: 0 },
+    { host: 'VISA', lote: '015', ref: '000002', pan: '4XXX XXXX XXXX 8513', marca: 'VISA', approval: '5A0D7E', fecha: '29/11/23', hora: '18:09:31', tipo: 'VENTA ANULADA', monto: -100, montoTexto: '-100.00', primerodelGrupo: 0, ultimodelGrupo: 1 },
+    { host: 'MASTERCARD', lote: '011', ref: '000001', pan: '5XXX XXXX XXXX 1385', marca: 'MASTERCARD', approval: '750952', fecha: '29/11/23', hora: '15:00:11', tipo: 'VENTA NORMAL', monto: 500, montoTexto: '500.00', primerodelGrupo: 1, ultimodelGrupo: 1 },
+    { host: 'AMEX', lote: '003', ref: '000001', pan: '3XXX XXXX XXXX 2135', marca: 'AMEX', approval: '097525', fecha: '29/11/23', hora: '11:10:31', tipo: 'VENTA NORMAL', monto: 300, montoTexto: '300.00', primerodelGrupo: 1, ultimodelGrupo: 1 },
+  ],
+  ventasCantidad: 4,
+  ventasMonto: 1000,
+  ventasMontoTexto: '1,000.00',
+  anulacionesCantidad: 1,
+  anulacionesMonto: -100,
+  anulacionesMontoTexto: '-100.00',
+  totalCantidad: 3,
+  totalMonto: 900,
+  totalMontoTexto: '900.00',
 };
 
 /* ===== Zonas: iconos y labels ===== */
@@ -899,6 +900,20 @@ const anchoPapelPreview = Math.ceil(
     updZonas((zs) => {
       const copia = [...zs];
       copia[zIdx] = { ...copia[zIdx], arrayOrigen: arrayOrigen || undefined };
+      return copia;
+    });
+  }, [updZonas]);
+
+  const setZonaTipo = useCallback((zIdx: number, tipo: TipoZonaTicket) => {
+    updZonas((zs) => {
+      const copia = [...zs];
+      // El origen de array solo aplica a la zona de detalle; al cambiar de tipo
+      // se limpia para no dejar una propiedad huerfana.
+      copia[zIdx] = {
+        ...copia[zIdx],
+        tipo,
+        arrayOrigen: tipo === 'detalle' ? copia[zIdx].arrayOrigen : undefined,
+      };
       return copia;
     });
   }, [updZonas]);
@@ -1984,11 +1999,13 @@ const guardarLibre = (texto: string, alineacion: AlineacionTicket, negrita: bool
                         </div>
                         <div>
                           <Text type="secondary" style={{ fontSize: 11 }}>Tipo de zona</Text>
-                          <Input
+                          <Select
                             size="small"
                             style={{ width: '100%', marginTop: 2 }}
-                            value={LABEL_ZONA[zona.tipo] || zona.tipo}
-                            disabled
+                            value={zona.tipo}
+                            disabled={ocupado}
+                            onChange={(value) => setZonaTipo(zonaIdx, value as TipoZonaTicket)}
+                            options={tiposZonaAgregar.map((t) => ({ label: LABEL_ZONA[t], value: t }))}
                           />
                         </div>
                         <div>
