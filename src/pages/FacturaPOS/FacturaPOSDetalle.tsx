@@ -587,7 +587,11 @@ const FacturaPOSDetalle: React.FC = () => {
     // Los impuestos ya se cargan automaticamente junto al encabezado.
     // Inyectar impuestosFactura en el payload para que el motor los resuelva.
     const impuestosFactura = data?.impuestosFactura || (await facturaPOSApi.obtenerImpuestos(sucursalActiva, parseInt(id || '0')));
-    const dataPrint = { ...data, impuestosFactura: impuestosFactura || [] };
+    const dataPrint = {
+      ...data,
+      impuestosFactura: impuestosFactura || [],
+      esReimpresion: String(data?.impreso ?? '').toUpperCase() === 'T',
+    };
 
     // Obtener el payload serializado que el frontend enviara directamente
     // al servicio local de la maquina cliente.
@@ -619,6 +623,9 @@ const FacturaPOSDetalle: React.FC = () => {
       const { payload, servicioLocalUrl } = await prepararPayloadTicket();
       const resultado = await reportesConfigApi.imprimirLocal(payload, servicioLocalUrl);
       if (resultado.ok) {
+        // Si se vuelve a imprimir sin recargar la pantalla, ya debe salir
+        // marcado como reimpresion.
+        setData((prev) => (prev ? { ...prev, impreso: 'T' } : prev));
         message.success(`Ticket enviado a la impresora`);
       } else {
         message.error(resultado.error ?? 'Error al imprimir: el servicio local no respondio');

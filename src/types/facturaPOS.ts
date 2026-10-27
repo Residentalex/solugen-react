@@ -184,6 +184,8 @@ export interface FacturaPOSDTO {
   periodo: number;
   ncf: string;
   ncfModificado: string;
+  /** 'T' cuando CTRANSAC.IMPRESO ya fue impreso. */
+  impreso?: string;
   referencia: string;
   nota: string;
   diasCredito: number;
