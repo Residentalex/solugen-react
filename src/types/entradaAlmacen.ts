@@ -315,6 +315,79 @@ export interface ReporteExistenciaDTO {
   almacenes: number;
 }
 
+// ===== Tipos para reportes de inventario (RENP / RSAP) =====
+
+/**
+ * Detalle de una fila del reporte de entradas/salidas de almacén.
+ * Campos reales devueltos por `GET /ENP/{sucursal}/detallado` y
+ * `GET /SAP/{sucursal}/detallado`.
+ */
+export interface ReporteInventarioDetalleDTO {
+  codigo?: string;
+  articulo?: string;
+  referencia?: string;
+  cantidad?: number;
+  costo?: number;
+  subTotal?: number;
+  descuento?: number;
+  impuestos?: number;
+  total?: number;
+  familia?: { nombre?: string };
+}
+
+/**
+ * Fila de documento del reporte de entradas/salidas de almacén.
+ * El backend devuelve los campos anidados como objetos (AlmacenDTO, ConceptoDTO, MonedaDTO).
+ * El campo Suplidor viene del backend con la informacion del suplidor.
+ */
+export interface ReporteInventarioDocumentoDTO {
+  noDocumento?: string;
+  fechaDocumento?: string;
+  nombreEntidad?: string;
+  suplidor?: SuplidorDTO;
+  almacen?: AlmacenDTO;
+  codigoAlmacenDestino?: string;
+  concepto?: ConceptoDTO;
+  moneda?: MonedaDTO;
+  total?: number;
+  estado?: number;
+  periodo?: number;
+  detalles?: ReporteInventarioDetalleDTO[];
+}
+
+/** Fila normalizada del reporte de inventario (por documento, producto o familia). */
+export interface FilaReporteInventario {
+  key: string;
+  noDocumento?: string;
+  fechaDocumento?: string;
+  entidad?: string;
+  almacen?: string;
+  concepto?: string;
+  estado?: number;
+  periodo?: number;
+  codigo?: string;
+  articulo?: string;
+  familia?: string;
+  cantidad?: number;
+  costo?: number;
+  subTotal?: number;
+  descuento?: number;
+  impuestos?: number;
+  total?: number;
+}
+
+/** Filtros del reporte de inventario (listado detallado y PDF). */
+export interface ReporteInventarioFiltros {
+  desde?: string;
+  hasta?: string;
+  cantidad?: number;
+  salto?: number;
+  codigo?: string;
+  almacen?: string;
+  familia?: string;
+  cuenta?: string;
+}
+
 // ===== Tipos para Orden de Compra (ORC) =====
 export interface OrdenCompraVistaDTO {
   id: number;

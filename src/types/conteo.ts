@@ -55,3 +55,31 @@ export interface UnidadMedidaDTO {
   nombre: string;
   factor?: number;
 }
+
+export interface ImportarConteoLineaDTO {
+  codigo: string;
+  cantidad: number;
+  /** Costo UNITARIO del artículo según el archivo de conteo. */
+  costo: number;
+}
+
+export interface ImportarConteoDTO {
+  /**
+   * Evento de inventario. Opcional: un conteo importado desde Excel puede
+   * capturarse sin evento, en cuyo caso la fecha de corte debe venir en
+   * `fecha`.
+   */
+  codEvento?: string;
+  /** Fecha del conteo en formato yyyyMMddHHmmss. */
+  fecha: string;
+  almacen: string;
+  documento?: string;
+  nota?: string;
+  usuario?: string;
+  lineas: ImportarConteoLineaDTO[];
+}
+
+export interface ConteoImportadoDTO {
+  inventId: number;
+  documento: string;
+}

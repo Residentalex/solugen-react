@@ -9,7 +9,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { productoApi } from '../../api/productoApi';
 import { servicioApi } from '../../api/servicioApi';
 import { recetaApi } from '../../api/recetaApi';
-import type { ProductoDTO, ImpuestoProductoDTO } from '../../types/productos';
+import type { ProductoDTO, ImpuestoProductoDTO, ReferenciaProductoDTO } from '../../types/productos';
 import type { IngredienteDTO } from '../../types/receta';
 import type { TipoImpuesto, AmbitoImpuesto } from '../../types/contabilidad';
 import ErrorBoundary from '../../components/ErrorBoundary';
@@ -442,6 +442,44 @@ const ProductoDetalle: React.FC<{ pantalla?: 'MProducto' | 'MServicio' }> = ({ p
               </Descriptions.Item>
             </Descriptions>
           </Card>
+
+          {!esServicio && (
+            <Card
+              title={`Referencias / Códigos de barra (${data.referencias?.length || 0})`}
+              className="paces-card"
+              style={{ marginBottom: 16 }}
+            >
+              <Table<ReferenciaProductoDTO>
+                dataSource={data.referencias || []}
+                columns={[
+                  {
+                    title: 'Referencia',
+                    dataIndex: 'referencia',
+                    render: (valor: string) => (
+                      <Text style={{ fontFamily: 'monospace' }}>{valor}</Text>
+                    ),
+                  },
+                  {
+                    title: 'Presentación',
+                    dataIndex: 'presentacionEquivalenteNombre',
+                    render: (valor: string) => valor || '-',
+                  },
+                  {
+                    title: 'Cantidad',
+                    dataIndex: 'cantidad',
+                    width: 110,
+                    align: 'right',
+                    render: (valor: number) => formatNumber(valor),
+                  },
+                ]}
+                rowKey={(_, index) => String(index)}
+                size="small"
+                pagination={false}
+                locale={{ emptyText: <Empty description="Sin referencias" /> }}
+                className="paces-border-top paces-list-table"
+              />
+            </Card>
+          )}
 
           <Card className="paces-card">
             <Tabs defaultActiveKey="impuestos" type="card" items={tabItems} />

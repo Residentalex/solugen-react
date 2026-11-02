@@ -36,6 +36,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
   const [searchTrans, setSearchTrans] = useState('');
   const [enTransito, setEnTransito] = useState<TransaccionConciliadaDTO[]>([]);
   const [loadingTransito, setLoadingTransito] = useState(false);
+  const [loadingTransacciones, setLoadingTransacciones] = useState(false);
   const [searchTransito, setSearchTransito] = useState('');
   const [resumenGeneral, setResumenGeneral] = useState<ResumenGeneralConciliacionDTO | null>(null);
   const [exportandoLibros, setExportandoLibros] = useState(false);
@@ -109,6 +110,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
 
   const cargarTransaccionesDetalle = useCallback(() => {
     if (!id) return;
+    setLoadingTransacciones(true);
     conciliacionBancariaApi.obtenerTransaccionesConciliadas(sucursalActiva, parseInt(id))
       .then((res) => {
         setTransaccionesDetalle(res);
@@ -117,7 +119,8 @@ const ConciliacionBancariaDetalle: React.FC = () => {
       .catch((err: any) => {
         const msg = extraerMensajeError(err, 'Error al cargar las transacciones');
         message.error(msg);
-      });
+      })
+      .finally(() => setLoadingTransacciones(false));
   }, [id, sucursalActiva]);
 
   const cargarResumenGeneral = useCallback(() => {
@@ -330,9 +333,14 @@ const ConciliacionBancariaDetalle: React.FC = () => {
       // Asegurar datos cargados bajo demanda (sin barrer CTRANSAC en el backend)
       let conciliadas = transaccionesDetalle;
       if (!transaccionesCargadas) {
-        conciliadas = await conciliacionBancariaApi.obtenerTransaccionesConciliadas(sucursalActiva, parseInt(id));
-        setTransaccionesDetalle(conciliadas);
-        setTransaccionesCargadas(true);
+        setLoadingTransacciones(true);
+        try {
+          conciliadas = await conciliacionBancariaApi.obtenerTransaccionesConciliadas(sucursalActiva, parseInt(id));
+          setTransaccionesDetalle(conciliadas);
+          setTransaccionesCargadas(true);
+        } finally {
+          setLoadingTransacciones(false);
+        }
       }
       let transito = enTransito;
       if (!transitoCargado) {
@@ -427,9 +435,14 @@ const ConciliacionBancariaDetalle: React.FC = () => {
     try {
       let datos = transaccionesDetalle;
       if (!transaccionesCargadas) {
-        datos = await conciliacionBancariaApi.obtenerTransaccionesConciliadas(sucursalActiva, parseInt(id));
-        setTransaccionesDetalle(datos);
-        setTransaccionesCargadas(true);
+        setLoadingTransacciones(true);
+        try {
+          datos = await conciliacionBancariaApi.obtenerTransaccionesConciliadas(sucursalActiva, parseInt(id));
+          setTransaccionesDetalle(datos);
+          setTransaccionesCargadas(true);
+        } finally {
+          setLoadingTransacciones(false);
+        }
       }
       if (datos.length === 0) {
         message.warning('No hay transacciones conciliadas para exportar');
@@ -1090,6 +1103,7 @@ const total = items.reduce((sum, m) => sum + (m.debCred === 'C' ? m.monto : -m.m
                     size="small"
                     pagination={{ pageSize: 10, showTotal: (t) => `${t} registros`, size: 'small' }}
                     scroll={{ x: 700 }}
+                    loading={loadingTransacciones}
                     locale={{ emptyText: 'No hay transacciones conciliadas' }}
                     summary={() => {
                       const items = searchTrans ? transaccionesDetalle.filter((t) =>
@@ -1579,6 +1593,7 @@ const total = items.reduce((sum, m) => sum + (m.debCred === 'C' ? m.monto : -m.m
                     size="small"
                     pagination={{ pageSize: 10, showTotal: (t) => `${t} registros`, size: 'small' }}
                     scroll={{ x: 700 }}
+                    loading={loadingTransacciones}
                     locale={{ emptyText: 'No hay transacciones conciliadas' }}
                     summary={() => {
                       const items = searchTrans ? transaccionesDetalle.filter((t) =>

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Tooltip, Alert, App, Typography, Dropdown
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Tooltip, Alert, App, Typography
 } from 'antd';
 import type { MenuProps } from 'antd';
 import {
@@ -205,7 +205,7 @@ const ReciboIngresoDetalle: React.FC = () => {
         const q = detalleSearch.toLowerCase();
         return (
           (d.documento || '').toLowerCase().includes(q) ||
-          (d.nCF || '').toLowerCase().includes(q)
+          ((d.ncf || d.nCF || '')).toLowerCase().includes(q)
         );
       })
     : (data?.transaccionesAsociadas || []);
@@ -245,7 +245,7 @@ const ReciboIngresoDetalle: React.FC = () => {
         return <span>{doc}</span>;
       },
     },
-    { title: 'NCF', dataIndex: 'nCF', key: 'nCF', width: 140, render: (v: string) => v || '-' },
+    { title: 'NCF', dataIndex: 'ncf', key: 'ncf', width: 140, render: (v: string, record: any) => v || record.nCF || '-' },
     { title: 'Monto Original', dataIndex: 'montoOriginal', key: 'montoOriginal', width: 130, align: 'right' as const, render: (v: number) => formatNumber(v) },
     { title: 'Pagado', dataIndex: 'pagado', key: 'pagado', width: 120, align: 'right' as const, render: (v: number) => formatNumber(v) },
     { title: 'Saldo', dataIndex: 'saldoPendiente', key: 'saldoPendiente', width: 120, align: 'right' as const, render: (_v: number, record: any) => <strong>{formatNumber(pendienteEfectivo(record))}</strong> },
@@ -624,19 +624,26 @@ const ReciboIngresoDetalle: React.FC = () => {
         onRevisado={handleRevisado}
         onDesaplicar={tienePagos ? undefined : async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
+        extraAcciones={[
+          {
+            key: 'imprimir',
+            label: 'Imprimir',
+            icon: <PrinterOutlined />,
+            soloIcono: true,
+            tooltip: 'Imprimir',
+            loading: imprimiendo,
+            permiso: { codigoPantalla: screenCode, accion: 'IMPRIMIR' },
+            menu: { items: printMenuItems, onClick: handlePrintMenuClick },
+          },
+        ]}
         extraButtons={
-          <>
-            <PermissionGate codigoPantalla={screenCode} accion="IMPRIMIR">
-              <Dropdown menu={{ items: printMenuItems, onClick: handlePrintMenuClick }} trigger={['click']}>
-                <Button icon={<PrinterOutlined />} loading={imprimiendo} />
-              </Dropdown>
-              {qz.printerName && (
-                <Tag color="success" style={{ marginLeft: 2, fontSize: 11, lineHeight: '18px' }}>
-                  QZ: {qz.printerName}
-                </Tag>
-              )}
-            </PermissionGate>
-          </>
+          <PermissionGate codigoPantalla={screenCode} accion="IMPRIMIR">
+            {qz.printerName && (
+              <Tag color="success" style={{ marginLeft: 2, fontSize: 11, lineHeight: '18px' }}>
+                QZ: {qz.printerName}
+              </Tag>
+            )}
+          </PermissionGate>
         }
       />
 

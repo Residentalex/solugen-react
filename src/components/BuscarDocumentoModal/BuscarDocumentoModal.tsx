@@ -43,6 +43,8 @@ interface BuscarDocumentoModalProps {
    * seleccion de documentos cuya moneda no coincide.
    */
   codigoMonedaPrincipal?: string;
+  /** Cuando false, no limita la asignacion por el monto a distribuir: cada documento toma su pendiente completo. */
+  limitarPorMontoADistribuir?: boolean;
 }
 
 /** Normaliza origenCuenta (string o number) al enum numerico OrigenCuenta */
@@ -60,6 +62,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
   esDocumentoInventario, montoTotal,
   documentosIniciales, documentoEnviado, puedeAsignar = true,
   transaccionId, excluirSpaId, sucursalForBloqueo, codigoMonedaPrincipal,
+  limitarPorMontoADistribuir = true,
 }) => {
   const TIPO_DOC_CODES: string[] = [
     'AID','AIC','ABN','AJA','CBI','CDC','CHK','CHN','CIE','CIT',
@@ -269,6 +272,23 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
             const doc = docs.find((d: any) => d.id === id);
             if (!doc) return;
             const pendienteReal = _obtenerPendienteReal(doc);
+
+            if (!limitarPorMontoADistribuir) {
+              // Modo pendiente completo (FSPA): cada documento toma su pendiente completo,
+              // sin recortar por el monto a distribuir.
+              if (doc?.esSobrepago ?? (pendienteReal < 0)) {
+                montosIniciales[String(id)] = normalizarMonto(Math.abs(pendienteReal));
+                return;
+              }
+              const pendienteCompleto = calcularPendienteDocumento(doc);
+              if (pendienteCompleto <= 0) {
+                montosIniciales[String(id)] = 0;
+                return;
+              }
+              montosIniciales[String(id)] = normalizarMonto(pendienteCompleto);
+              return;
+            }
+
             if (doc?.esSobrepago ?? (pendienteReal < 0)) {
               // Sobrepago: asignar valor absoluto
               const asignar = limitarMonto(Math.abs(pendienteReal), desdeCentavos(restanteCentavos));
@@ -401,6 +421,21 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
         if (!doc) return;
         const pendienteReal = _obtenerPendienteReal(doc);
         const pendiente = calcularPendienteDocumento(doc);
+
+        if (!limitarPorMontoADistribuir) {
+          // Modo pendiente completo (FSPA): sin limitar por el disponible restante.
+          if (doc?.esSobrepago ?? (pendienteReal < 0)) {
+            nuevos[String(key)] = normalizarMonto(Math.abs(pendienteReal));
+            return;
+          }
+          if (pendiente <= 0) {
+            nuevos[String(key)] = 0;
+            return;
+          }
+          nuevos[String(key)] = normalizarMonto(pendiente);
+          return;
+        }
+
         // Calcular cuánto está ya asignado en TODAS las filas (en centavos enteros)
         const yaAsignadoCentavos = aCentavos(sumarMontos(Object.values(nuevos)));
         const disponibleCentavos = montoADistribuir > 0
@@ -426,7 +461,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
 
   // ===== Asignar montos automáticamente =====
   const handleAsignar = () => {
-    if (montoADistribuir <= 0) return;
+    if (limitarPorMontoADistribuir && montoADistribuir <= 0) return;
 
     const filas = selectedRowKeys.length > 0 ? selectedRowKeys : documentos.map(d => d.id);
 
@@ -443,7 +478,9 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       return calcularPendienteDocumento(doc);
     });
 
-    const montos = distribuirMonto(montoADistribuir, limites);
+    const montos = limitarPorMontoADistribuir
+      ? distribuirMonto(montoADistribuir, limites)
+      : limites.map((l) => normalizarMonto(l));
     const nuevosMontos: Record<string, number> = {};
     filas.forEach((id, indice) => {
       nuevosMontos[String(id)] = montos[indice];
@@ -597,23 +634,31 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       footer={
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
           <Space>
-            <span>Monto a distribuir:</span>
-            <InputNumber
-              size="small"
-              style={{ width: 120 }}
-              min={0}
-              step={0.01}
-              precision={2}
-              value={montoADistribuir}
-              onChange={(val) => setMontoADistribuir(normalizarMonto(val ?? 0))}
-            />
-            <span style={{ marginLeft: 16, color: '#888' }}>
-              Distribuido: {formatNumber(totalDistribuido)} |{' '}
-              Disponible:{' '}
-              <span style={{ color: desdeCentavos(aCentavos(montoADistribuir) - aCentavos(totalDistribuido)) < 0 ? '#ff4d4f' : '#52c41a' }}>
-                {formatNumber(desdeCentavos(Math.max(0, aCentavos(montoADistribuir) - aCentavos(totalDistribuido))))}
+            {limitarPorMontoADistribuir ? (
+              <>
+                <span>Monto a distribuir:</span>
+                <InputNumber
+                  size="small"
+                  style={{ width: 120 }}
+                  min={0}
+                  step={0.01}
+                  precision={2}
+                  value={montoADistribuir}
+                  onChange={(val) => setMontoADistribuir(normalizarMonto(val ?? 0))}
+                />
+                <span style={{ marginLeft: 16, color: '#888' }}>
+                  Distribuido: {formatNumber(totalDistribuido)} |{' '}
+                  Disponible:{' '}
+                  <span style={{ color: desdeCentavos(aCentavos(montoADistribuir) - aCentavos(totalDistribuido)) < 0 ? '#ff4d4f' : '#52c41a' }}>
+                    {formatNumber(desdeCentavos(Math.max(0, aCentavos(montoADistribuir) - aCentavos(totalDistribuido))))}
+                  </span>
+                </span>
+              </>
+            ) : (
+              <span style={{ color: '#888' }}>
+                Distribuido: {formatNumber(totalDistribuido)}
               </span>
-            </span>
+            )}
           </Space>
           <Space>
             <Button onClick={handleAsignar}>Asignar</Button>

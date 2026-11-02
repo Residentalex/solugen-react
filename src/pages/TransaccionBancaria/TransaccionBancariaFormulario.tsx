@@ -169,18 +169,25 @@ const TransaccionBancariaFormulario: React.FC = () => {
   // SubTotal = sumaMontos + sumaDescuentos (el monto base antes de descuento)
   const subTotalCalculado = Math.round((sumaMontos + sumaDescuentos) * 100) / 100;
 
-  // ===== Sincronizar totales al formulario =====
-  useEffect(() => {
-    form.setFieldsValue({
-      subTotal: subTotalCalculado,
-      descuento: Math.round(sumaDescuentos * 100) / 100,
-    });
-  }, [sumaMontos, sumaDescuentos, form]);
-
   // Total = SubTotal - Descuento + Impuestos - Retenciones = sumaMontos + impuestos - retenciones
   const totalCalculado = Math.round(
     (sumaMontos + (impuestosValue || 0) - (retencionesValue || 0)) * 100
   ) / 100;
+
+  // ===== Sincronizar totales al formulario =====
+  // Con documentos relacionados el Total se DERIVA de ellos (no editable),
+  // igual que la SPA. Sin documentos (avance al suplidor) se respeta el
+  // valor manual del campo.
+  useEffect(() => {
+    const valores: Record<string, number> = {
+      subTotal: subTotalCalculado,
+      descuento: Math.round(sumaDescuentos * 100) / 100,
+    };
+    if (documentosAsociados.length > 0) {
+      valores.total = totalCalculado;
+    }
+    form.setFieldsValue(valores);
+  }, [sumaMontos, sumaDescuentos, totalCalculado, documentosAsociados.length, form]);
 
   // Usar el total que el usuario escribió en el formulario, si lo hay;
   // si no, caer al cálculo automático.
@@ -550,7 +557,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
       descuento: sumaDescuentos,
       impuestos: impuestosValue,
       retenciones: retencionesValue,
-      total: form.getFieldValue('total') ?? 0,
+      total: documentosAsociados.length > 0 ? totalCalculado : (form.getFieldValue('total') ?? 0),
       tasa: tasaValue,
       nombreBeneficiario: values.beneficiario || undefined,
       codigoMoneda: codigoMonedaDocumento,
@@ -936,6 +943,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
                   step={0.01}
                   precision={2}
                   prefix={monedaSimbolo}
+                  disabled={documentosAsociados.length > 0}
                 />
               </FloatingField>
             </Form.Item>

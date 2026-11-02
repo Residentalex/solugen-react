@@ -120,6 +120,8 @@ export interface CobroDTO {
   bono: number;
   tarjetaRegalo: number;
   notaCredito: number;
+  /** ID del documento (PV) al que pertenece el cobro. Se envía en el PUT de cobros. */
+  facturaID?: number;
   documentosAsociados?: DocumentoAsociadoRequest[];
 }
 

@@ -47,7 +47,9 @@ function obtenerSucursalActiva(): Sucursal {
 function obtenerSucursalContable(): Sucursal {
   try {
     const raw = sessionStorage.getItem('sucursalContable');
-    return raw ? (parseInt(raw, 10) as Sucursal) : SUCURSAL_CONSOLIDADO;
+    if (!raw) return SUCURSAL_CONSOLIDADO;
+    const parsed = parseInt(raw, 10);
+    return isNaN(parsed) ? SUCURSAL_CONSOLIDADO : (parsed as Sucursal);
   } catch {
     return SUCURSAL_CONSOLIDADO;
   }
@@ -136,7 +138,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     sessionStorage.removeItem('ultimaSucursalActiva');
 
     sessionStorage.setItem('sucursalActiva', String(sucursalFinal));
-    sessionStorage.setItem('sucursalContable', String(sesion.sucursalContable));
+    sessionStorage.setItem('sucursalContable', String(sesion.sucursalContable ?? SUCURSAL_CONSOLIDADO));
 
     const todasLasPantallas = sesion.usuario.pantallas;
     const pantallasConAcciones = aplicarAccionesPorSucursal(todasLasPantallas, sucursalFinal);
@@ -151,7 +153,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       usuario: usuarioActualizado,
       todasLasPantallas,
       sucursalActiva: sucursalFinal,
-      sucursalContable: sesion.sucursalContable,
+      sucursalContable: sesion.sucursalContable ?? SUCURSAL_CONSOLIDADO,
       sucursalesPermitidas: sesion.sucursalesPermitidas,
       compania: SUCURSAL_CONSOLIDADO,
       equipo: request.equipo,

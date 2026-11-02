@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Card, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Typography, Tooltip, Descriptions, Alert, Switch, App,
 } from 'antd';
@@ -20,6 +20,7 @@ import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
 import type { AsientoContableDTO, LogDTO } from '../../types/entradaAlmacen';
 import EntidadCard from '../../components/EntidadCard';
+import ModalAnular from '../../components/ModalAnular/ModalAnular';
 import TotalesCard from '../../components/TotalesCard';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 import { formatNumber, toTitleCase, formatDate } from '../../utils/formats';
@@ -90,6 +91,7 @@ function normalizarTransaccion(t: TransaccionDTO): any {
 const TransaccionBancariaDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s: any) => s.setPageTitleOverride);
@@ -102,6 +104,7 @@ const TransaccionBancariaDetalle: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [modalAnularOpen, setModalAnularOpen] = useState(false);
   const monedaDefault = getMonedaSucursalActiva();
   const [mostrandoReverso, setMostrandoReverso] = useState(false);
   const [reversoData, setReversoData] = useState<any>(null);
@@ -227,12 +230,18 @@ const TransaccionBancariaDetalle: React.FC = () => {
     }
   };
 
-  const handleAnular = async () => {
-    if (!data) return;
+  const handleAnularConfirm = async (dataAnular: { fecha: string; motivo: string }) => {
+    if (!rawData) return;
     setSaving(true);
     try {
-      await transaccionBancariaApi.anular(sucursalActiva, data as any);
+      const dto = {
+        ...rawData,
+        fechaDocumento: dataAnular.fecha,
+        nota: `${rawData.nota || ''} Documento anulado por: ${dataAnular.motivo}.`,
+      };
+      await transaccionBancariaApi.anular(sucursalActiva, dto as any);
       message.success('Documento anulado exitosamente');
+      setModalAnularOpen(false);
       const res = await transaccionBancariaApi.obtenerPorId(sucursalActiva, parseInt(id!));
       const normalizado = normalizarTransaccion(res);
       setData(normalizado);
@@ -297,6 +306,9 @@ const TransaccionBancariaDetalle: React.FC = () => {
   const isLarge = screens.xxl === true;
   const estadoInfo = ESTADO_DOCUMENTO_MAP[toEstadoNum(documentoActivo.estado)] || { label: 'Desconocido', color: 'default' };
   const esCerrado = toPeriodoNum(documentoActivo.periodo) === 6;
+  const cuentaBancariaVolver = (location.state as any)?.cuentaCodigo || documentoActivo.cuentaBancaria || undefined;
+  const searchTextVolver = (location.state as any)?.searchText || undefined;
+  const volverState = (cuentaBancariaVolver || searchTextVolver) ? { cuentaCodigo: cuentaBancariaVolver, searchText: searchTextVolver } : undefined;
 
   return (
     <div>
@@ -319,10 +331,10 @@ const TransaccionBancariaDetalle: React.FC = () => {
         estado={documentoActivo.estado}
         periodo={documentoActivo.periodo}
         saving={saving}
-        onVolver={() => navigate('/FTransBanco')}
+        onVolver={() => navigate('/FTransBanco', volverState ? { state: volverState } : undefined)}
         onEditar={() => navigate(`/FTransBanco/${id}/editar`)}
         onAplicar={handleAplicar}
-        onAnular={handleAnular}
+        onAnular={async () => setModalAnularOpen(true)}
         onPostear={handlePostear}
         onDesaplicar={handleDesaplicar}
         showImprimir={true}
@@ -559,6 +571,14 @@ const TransaccionBancariaDetalle: React.FC = () => {
           </div>
         </div>
       )}
+      <ModalAnular
+        open={modalAnularOpen}
+        onClose={() => setModalAnularOpen(false)}
+        onConfirm={handleAnularConfirm}
+        documento={`${data?.documento?.codigo || data?.codigoTipo || ''}-${data?.noDocumento || ''}`}
+        fechaDocumento={rawData?.fechaDocumento || ''}
+        periodoCerrado={esCerrado}
+      />
     </div>
   );
 };

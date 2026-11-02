@@ -28,7 +28,6 @@ import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLa
 import { formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
-import PermissionGate from '../../components/PermissionGate';
 import ErrorDetalle from '../../components/ErrorDetalle';
 import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import ModalAnular from '../../components/ModalAnular/ModalAnular';
@@ -335,6 +334,15 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
         onRevisado={handleRevisado}
         onDesaplicar={async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
+        extraAcciones={id ? [
+          {
+            key: 'recalcular',
+            label: 'Recalcular',
+            icon: <ReloadOutlined />,
+            loading: recalculando,
+            permiso: { permisoEspecial: 'pe_recalcular' },
+          },
+        ] : undefined}
         extraButtons={id ? (
           <>
             {toEstadoNum(data?.estado) === 3 && reversoData && (
@@ -346,15 +354,6 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
                 style={{ marginLeft: 8 }}
               />
             )}
-            <PermissionGate permisoEspecial="pe_recalcular">
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={handleRecalcular}
-                loading={recalculando}
-              >
-                Recalcular
-              </Button>
-            </PermissionGate>
           </>
         ) : undefined}
       />

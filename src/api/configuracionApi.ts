@@ -15,6 +15,7 @@ export interface ConfiguracionEmpresa {
   fechaCierreFiscal: string | null;
   metodoFacturacionDGII: string;
   orcEnUnidades: boolean;
+  actualizarSuplidorEnEntrada: boolean;
 }
 
 export const configuracionApi = {

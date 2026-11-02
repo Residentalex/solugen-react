@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, message, Form, Input,  Switch, Row, Col, Typography,
-  Tabs, Descriptions, InputNumber, Tag, Grid, Divider, DatePicker,
+  Card, message, Form, Input, Switch, Row, Col, Typography,
+  Tabs, InputNumber, Tag, Grid, Divider, DatePicker,
   Button, Modal, Table,
 } from 'antd';
 import { Select } from '../../components/Select';
@@ -18,7 +18,6 @@ import type { ClienteDTO, CategoriaEntidadDTO, TipoComprobanteNCFDTO } from '../
 import type { CuentaContableResumenDTO, MonedaDTO } from '../../types/contabilidad';
 import ErrorBoundary from '../../components/ErrorBoundary';
 import DetalleCatalogoLayout from '../../components/DetalleCatalogoLayout';
-import FormularioToolbar from '../../components/FormularioToolbar';
 import { formatCurrency, toISOFormat } from '../../utils/formats';
 import PersonasAutorizadasTab from './components/PersonasAutorizadasTab';
 import EntidadGruposProductosTab from '../../components/EntidadGruposProductosTab';
@@ -26,6 +25,8 @@ import EntidadCuentasBancariasTab from '../../components/EntidadCuentasBancarias
 import LugaresTrabajoTab from './components/LugaresTrabajoTab';
 import TabProximamente from '../../components/TabProximamente';
 import EntidadContactosTab from '../../components/EntidadContactosTab';
+import EntidadImagenCard from '../../components/EntidadImagenCard/EntidadImagenCard';
+import EditorTextoRico from '../../components/EditorTextoRico/EditorTextoRico';
 
 const { Text } = Typography;
 
@@ -622,10 +623,11 @@ const ClienteDetalle: React.FC = () => {
 
   // ===== Componentes auxiliares render =====
 
-  const renderCampo = (nombre: string, children: React.ReactNode, span?: number | { xs?: number; sm?: number; md?: number; lg?: number; xl?: number; xxl?: number }) => (
-    <Descriptions.Item label={nombre} {...(span ? { span } : {})}>
-      {children}
-    </Descriptions.Item>
+  const renderCelda = (nombre: string, children: React.ReactNode, modificador?: string) => (
+    <div className={`paces-form-grid__celda${modificador ? ` ${modificador}` : ''}`}>
+      <div className="paces-form-grid__label">{nombre}</div>
+      <div className="paces-form-grid__valor">{children}</div>
+    </div>
   );
 
   const renderReadonlyText = (valor: string | number | null | undefined, formato?: (v: any) => string) => (
@@ -643,8 +645,8 @@ const ClienteDetalle: React.FC = () => {
   // ===== Card: Datos Generales =====
   const renderDatosGenerales = () => (
     <Card title="Datos Generales" className="paces-card" style={{ marginBottom: 16 }}>
-      <Descriptions bordered size="small" column={{ xs: 1, sm: 3 }} styles={{ content: { background: 'transparent' } }}>
-        {renderCampo('Código',
+      <div className="paces-form-grid">
+        {renderCelda('Código',
           esSoloLectura ? (
             <Text style={{ fontFamily: 'monospace' }}>{data?.codigo}</Text>
           ) : esNuevo ? (
@@ -655,19 +657,20 @@ const ClienteDetalle: React.FC = () => {
             <Form.Item name="codigo" noStyle rules={[{ required: true, message: 'Obligatorio' }]}>
               <Input disabled placeholder="Código" maxLength={20} />
             </Form.Item>
-          )
+          ),
+          'paces-form-grid__celda--col-3'
         )}
-        {renderCampo('Nombre / Razón Social',
+        {renderCelda('Nombre / Razón Social',
           esSoloLectura ? (
             <Text>{data?.nombre}</Text>
           ) : (
             <Form.Item name="nombre" noStyle rules={[{ required: true, message: 'Obligatorio' }]}>
-              <Input placeholder="Nombre del cliente" maxLength={100} />
+              <Input.TextArea placeholder="Nombre del cliente" maxLength={100} autoSize={{ minRows: 4, maxRows: 6 }} />
             </Form.Item>
           ),
-          { sm: 2 }
+          'paces-form-grid__celda--row-3 paces-form-grid__celda--alto'
         )}
-        {renderCampo('Tipo Identificación',
+        {renderCelda('Tipo Identificación',
           esSoloLectura ? (
             <Text>{(() => {
               const val = enumStringToValor(data?.tipoIdentificacion, TIPO_IDENTIFICACION_REV);
@@ -686,7 +689,7 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
-        {renderCampo('Identificación',
+        {renderCelda('Identificación',
           esSoloLectura ? (
             <Text>{data?.identificacion}</Text>
           ) : (
@@ -695,7 +698,7 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
-        {!empresaValue && renderCampo('Sexo',
+        {!empresaValue && renderCelda('Sexo',
           esSoloLectura ? (
             <Text>{(() => {
               const val = enumStringToValor(data?.sexo, SEXO_REV);
@@ -712,7 +715,7 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
-        {!empresaValue && renderCampo('Estado Civil',
+        {!empresaValue && renderCelda('Estado Civil',
           esSoloLectura ? (
             <Text>{(() => {
               const val = enumStringToValor(data?.estadoCivil, ESTADO_CIVIL_REV);
@@ -731,7 +734,7 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
-        {!empresaValue && renderCampo('Fecha Nacimiento',
+        {!empresaValue && renderCelda('Fecha Nacimiento',
           esSoloLectura ? (
             <Text>{data?.fechaNacimiento || '-'}</Text>
           ) : (
@@ -740,25 +743,7 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
-        {renderCampo('Fecha Ingreso',
-          esSoloLectura ? (
-            <Text>{data?.fechaIngreso || '-'}</Text>
-          ) : (
-            <Form.Item name="fechaIngreso" noStyle>
-              <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
-            </Form.Item>
-          )
-        )}
-        {renderCampo('Nombre Comercial',
-          esSoloLectura ? (
-            <Text>{data?.nombreComercial || '-'}</Text>
-          ) : (
-            <Form.Item name="nombreComercial" noStyle>
-              <Input placeholder="Nombre comercial" maxLength={100} />
-            </Form.Item>
-          )
-        )}
-        {renderCampo('Activo',
+        {renderCelda('Activo',
           esSoloLectura ? (
             <Tag color={data?.activo ? 'green' : 'default'}>{data?.activo ? 'Activo' : 'Inactivo'}</Tag>
           ) : (
@@ -767,7 +752,7 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
-        {renderCampo('Empresa',
+        {renderCelda('Empresa',
           esSoloLectura ? (
             <Tag color={data?.empresa ? 'blue' : 'default'}>{data?.empresa ? 'Empresa' : 'Persona'}</Tag>
           ) : (
@@ -776,7 +761,45 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
-        {renderCampo('Categoría',
+        {renderCelda('Fecha Ingreso',
+          esSoloLectura ? (
+            <Text>{data?.fechaIngreso || '-'}</Text>
+          ) : (
+            <Form.Item name="fechaIngreso" noStyle>
+              <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+            </Form.Item>
+          )
+        )}
+        {renderCelda('Nombre Comercial',
+          esSoloLectura ? (
+            <Text>{data?.nombreComercial || '-'}</Text>
+          ) : (
+            <Form.Item name="nombreComercial" noStyle>
+              <Input placeholder="Nombre comercial" maxLength={100} />
+            </Form.Item>
+          )
+        )}
+        {!empresaValue && (
+          <div className="paces-form-grid__celda paces-form-grid__celda--relleno" aria-hidden="true" />
+        )}
+        {renderCelda('Nota',
+          <Form.Item name="nota" noStyle>
+            <EditorTextoRico
+              placeholder="Notas del cliente"
+              readOnly={esSoloLectura || guardando || !editando}
+            />
+          </Form.Item>,
+          'paces-form-grid__celda--full'
+        )}
+      </div>
+    </Card>
+  );
+
+  // ===== Card: Comercial / Financiero =====
+  const renderComercialFinanciero = () => (
+    <Card title="Comercial / Financiero" className="paces-card" style={{ marginBottom: 16 }}>
+      <div className="paces-form-grid paces-form-grid--3col">
+        {renderCelda('Categoría',
           esSoloLectura ? (
             <Text>{data?.categoria?.nombre || '-'}</Text>
           ) : (
@@ -796,9 +819,10 @@ const ClienteDetalle: React.FC = () => {
                 }}
                 options={categorias.map(c => ({ value: c.codigo, label: `${c.codigo} - ${c.nombre}` }))} />
             </Form.Item>
-          )
+          ),
+          'paces-form-grid__celda--row-2'
         )}
-        {renderCampo('Tipo NCF',
+        {renderCelda('Tipo NCF',
           esSoloLectura ? (
             <Text>{data?.tipoNCF?.nombre || '-'}</Text>
           ) : (
@@ -809,7 +833,7 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
-        {renderCampo('Cuenta Contable',
+        {renderCelda('Cuenta Contable',
           esSoloLectura ? (
             <Text>{data?.cuentaContable?.noCuenta ? `${data.cuentaContable.noCuenta} - ${data.cuentaContable.nombre}` : '-'}</Text>
           ) : (
@@ -821,25 +845,7 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
-        {renderCampo('Nota',
-          esSoloLectura ? (
-            <div style={{ whiteSpace: 'pre-wrap' }}>{data?.nota || '-'}</div>
-          ) : (
-            <Form.Item name="nota" noStyle>
-              <Input.TextArea placeholder="Notas del cliente" rows={3} autoSize={{ minRows: 3, maxRows: 8 }} maxLength={500} showCount />
-            </Form.Item>
-          ),
-          { sm: 3 }
-        )}
-      </Descriptions>
-    </Card>
-  );
-
-  // ===== Card: Comercial / Financiero =====
-  const renderComercialFinanciero = () => (
-    <Card title="Comercial / Financiero" className="paces-card" style={{ marginBottom: 16 }}>
-      <Descriptions bordered size="small" column={{ xs: 1, sm: 2 }} styles={{ content: { background: 'transparent' } }}>
-        {renderCampo('Vendedor',
+        {renderCelda('Vendedor',
           esSoloLectura ? (
             <Text>{data?.vendedorNombre || '-'}</Text>
           ) : (
@@ -849,7 +855,7 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
-        {renderCampo('Lista de Precios',
+        {renderCelda('Lista de Precios',
           esSoloLectura ? (
             <Text>{data?.listaPrecioNombre || '-'}</Text>
           ) : (
@@ -858,7 +864,7 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
-        {renderCampo('Perfil',
+        {renderCelda('Perfil',
           esSoloLectura ? (
             <Text>{data?.perfil || '-'}</Text>
           ) : (
@@ -867,7 +873,7 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
-        {renderCampo('Comisión %',
+        {renderCelda('Comisión %',
           esSoloLectura ? (
             <Text>{data?.comision != null ? `${data.comision.toFixed(2)}%` : '-'}</Text>
           ) : (
@@ -876,7 +882,7 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
-        {renderCampo('Moneda',
+        {renderCelda('Moneda',
           esSoloLectura ? (
             <Text>{data?.codigoMoneda || '-'}</Text>
           ) : (
@@ -887,7 +893,7 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
-        {renderCampo('Límite Crédito',
+        {renderCelda('Límite Crédito',
           esSoloLectura ? (
             renderReadonlyMoneda(data?.limiteCredito)
           ) : (
@@ -896,7 +902,7 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
-        {renderCampo('Días Crédito',
+        {renderCelda('Días Crédito',
           esSoloLectura ? (
             renderReadonlyText(data?.diasCredito)
           ) : (
@@ -905,7 +911,7 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
-        {renderCampo('% Descuento',
+        {renderCelda('% Descuento',
           esSoloLectura ? (
             renderReadonlyText(data?.porcientoDescuento, (v: number) => `${v.toFixed(2)}%`)
           ) : (
@@ -914,7 +920,7 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
-        {renderCampo('Margen',
+        {renderCelda('Margen',
           esSoloLectura ? (
             renderReadonlyText(data?.margen)
           ) : (
@@ -923,7 +929,7 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
-        {renderCampo('Crédito Suspendido',
+        {renderCelda('Crédito Suspendido',
           esSoloLectura ? (
             renderReadonlyTag(data?.creditoSuspendido)
           ) : (
@@ -932,7 +938,7 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
-        {renderCampo('Exento Impuesto',
+        {renderCelda('Exento Impuesto',
           esSoloLectura ? (
             renderReadonlyTag(data?.exentoImpuesto)
           ) : (
@@ -941,7 +947,7 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
-        {renderCampo('Factura Docs. Vencidos',
+        {renderCelda('Factura Docs. Vencidos',
           esSoloLectura ? (
             renderReadonlyTag(data?.facturaDocumentosVencidos)
           ) : (
@@ -950,7 +956,9 @@ const ClienteDetalle: React.FC = () => {
             </Form.Item>
           )
         )}
-      </Descriptions>
+        <div className="paces-form-grid__celda paces-form-grid__celda--relleno" aria-hidden="true" />
+        <div className="paces-form-grid__celda paces-form-grid__celda--relleno" aria-hidden="true" />
+      </div>
     </Card>
   );
 
@@ -983,17 +991,7 @@ const ClienteDetalle: React.FC = () => {
 
   // ===== Render Principal =====
   const renderFormulario = () => (
-    <>
-      {editando && (
-        <FormularioToolbar
-          saving={guardando}
-          mode={esNuevo ? 'crear' : 'editar'}
-          onGuardar={handleGuardar}
-          onCancelar={handleCancelar}
-        />
-      )}
-
-      <Form form={form} layout="vertical" size="small" onValuesChange={() => setFormTouched(true)} disabled={guardando}>
+    <Form form={form} layout="vertical" size="small" onValuesChange={() => setFormTouched(true)} disabled={guardando}>
       {isLarge ? (
         <Row gutter={16}>
           <Col xxl={18}>
@@ -1004,6 +1002,7 @@ const ClienteDetalle: React.FC = () => {
             </Card>
           </Col>
           <Col xxl={6}>
+            <EntidadImagenCard codigo={esNuevo ? undefined : codigo} editable={!esSoloLectura} />
             {renderSidebar()}
           </Col>
         </Row>
@@ -1011,13 +1010,13 @@ const ClienteDetalle: React.FC = () => {
         <div>
           {renderDatosGenerales()}
           {renderComercialFinanciero()}
+          <EntidadImagenCard codigo={esNuevo ? undefined : codigo} editable={!esSoloLectura} />
           <Card className="paces-card" styles={{ body: { padding: 0 } }}>
             <Tabs defaultActiveKey="personas" type="card" style={{ borderRadius: 8, padding: '0 16px' }} items={tabItems} />
           </Card>
         </div>
       )}
     </Form>
-    </>
   );
 
   return (
@@ -1033,12 +1032,18 @@ const ClienteDetalle: React.FC = () => {
         dataDisponible={esNuevo || !!data}
         modo={esNuevo ? 'crear' : 'editar'}
         onEditar={(!esNuevo && !editando && puedeEditar) ? () => { setEditando(true); cargarCategorias(); cargarTiposNCF(); cargarCuentasContables(); cargarMonedas(); } : undefined}
+        onGuardar={editando ? handleGuardar : undefined}
+        onCancelar={editando ? handleCancelar : undefined}
         guardando={guardando}
-        extraActions={esNuevo ? (
-          <Button icon={<CopyOutlined />} onClick={abrirModalClonar} disabled={guardando}>
-            Clonar desde otra entidad
-          </Button>
-        ) : undefined}
+        extraAcciones={esNuevo ? [
+          {
+            key: 'clonar-entidad',
+            label: 'Clonar desde otra entidad',
+            icon: <CopyOutlined />,
+            onClick: abrirModalClonar,
+            disabled: guardando,
+          },
+        ] : []}
       >
         {renderFormulario()}
       </DetalleCatalogoLayout>

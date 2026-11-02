@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 import type { ApiResponse } from '../types/auth';
-import type { TransaccionDTO, TransaccionVistaDTO, FiltroTransaccion } from '../types/transaccion';
+import type { TransaccionDTO, TransaccionVistaDTO, FiltroTransaccion, ValidacionPagosDTO } from '../types/transaccion';
 import type { DocumentoSinAsientoDTO } from '../types/integridad';
 
 const BASE = '/Transaccion';
@@ -212,6 +212,14 @@ export const transaccionApi = {
     const { data } = await apiClient.get<ApiResponse<TransaccionVistaDTO[]>>(
       `${BASE}/${sucursal}/buscar`,
       { params }
+    );
+    return data.data;
+  },
+
+  /** Validar el historial de pagos de un documento antes de aplicarlo */
+  obtenerValidacionPagos: async (sucursal: number, id: number): Promise<ValidacionPagosDTO> => {
+    const { data } = await apiClient.get<ApiResponse<ValidacionPagosDTO>>(
+      `${BASE}/${sucursal}/validarPagos/${id}`
     );
     return data.data;
   },

@@ -22,11 +22,12 @@ import FormularioToolbar from '../../components/FormularioToolbar';
 import SeleccionarImpuestosModal from '../../components/SeleccionarImpuestosModal';
 import type { ImpuestoSeleccionado } from '../../components/SeleccionarImpuestosModal';
 import ProductoComponentesCard from '../../components/ProductoComponentesCard';
+import ProductoReferenciasCard from '../../components/ProductoReferenciasCard';
 import ImportarComponentesModal from '../../components/ImportarComponentesModal';
 import { toTitleCase, extraerMensajeError } from '../../utils/formats';
 import type {
   ProductoDTO, FamiliaArticuloDTO, CategoriaArticuloDTO,
-  UnidadMedidaDTO, DatosExtraProductoDTO,
+  UnidadMedidaDTO, DatosExtraProductoDTO, ReferenciaProductoDTO,
 } from '../../types/productos';
 import type { ComponenteProductoDTO, IngredienteDTO } from '../../types/receta';
 import type { TipoImpuesto } from '../../types/contabilidad';
@@ -64,6 +65,7 @@ const ProductoFormulario: React.FC<{ pantalla?: 'MProducto' | 'MServicio' }> = (
   const guardandoRef = useRef(false);
   const navigationConfirmedRef = useFormularioNavigation(guardandoRef);
   const [form] = Form.useForm();
+  const pesadoValue = Form.useWatch('pesado', form);
 
   const [loading, setLoading] = useState(true);
   const [loadingError, setLoadingError] = useState(false);
@@ -81,6 +83,9 @@ const ProductoFormulario: React.FC<{ pantalla?: 'MProducto' | 'MServicio' }> = (
   // Modal de selección de impuestos
   const [modalImpuestosOpen, setModalImpuestosOpen] = useState(false);
   const [selectedImpuestos, setSelectedImpuestos] = useState<ImpuestoSeleccionado[]>([]);
+
+  // Referencias alternativas (EQUIVAL)
+  const [referencias, setReferencias] = useState<ReferenciaProductoDTO[]>([]);
 
   // Componentes / receta
   const [componentes, setComponentes] = useState<ComponenteProductoDTO[]>([]);
@@ -134,6 +139,7 @@ const ProductoFormulario: React.FC<{ pantalla?: 'MProducto' | 'MServicio' }> = (
         nombre: prod.nombre,
         referenciaInterna: prod.referenciaInterna,
         upc: prod.upc,
+        numPlu: prod.numPlu || '',
         codigoSuplidor: prod.codigoSuplidor || '',
         precio: prod.precio,
         ultimoCosto: prod.ultimoCosto,
@@ -148,6 +154,7 @@ const ProductoFormulario: React.FC<{ pantalla?: 'MProducto' | 'MServicio' }> = (
         activo: prod.activo,
         modificaPrecio: prod.modificaPrecio || false,
         modificaDescripcion: prod.modificaDescripcion || false,
+        precioAuto: prod.precioAuto || false,
         requiereFechaVenc: prod.requiereFechaVenc || false,
         diasVencimiento: prod.diasVencimiento,
         codigoControl: prod.datosExtra?.codigoControl || '',
@@ -180,6 +187,18 @@ const ProductoFormulario: React.FC<{ pantalla?: 'MProducto' | 'MServicio' }> = (
       } else {
         setSelectedImpuestos([]);
       }
+
+      setReferencias(
+        isCloning
+          ? []
+          : (prod.referencias || []).map((r) => ({
+              idExterno: r.idExterno,
+              referencia: r.referencia || '',
+              presentacionEquivalenteID: r.presentacionEquivalenteID,
+              presentacionEquivalenteNombre: r.presentacionEquivalenteNombre,
+              cantidad: r.cantidad ?? 1,
+            }))
+      );
 
       if (cargarImagen) {
         await cargarImagenExistente(prodCodigo);
@@ -236,6 +255,8 @@ const ProductoFormulario: React.FC<{ pantalla?: 'MProducto' | 'MServicio' }> = (
           activo: true,
           paraVender: true,
           paraComprar: true,
+          precioAuto: false,
+          numPlu: '',
           precio: 0,
           ultimoCosto: 0,
           prodserv: esServicio ? 'S' : 'P',
@@ -269,6 +290,31 @@ const ProductoFormulario: React.FC<{ pantalla?: 'MProducto' | 'MServicio' }> = (
 
       if (values.precio < 0) {
         message.error('El precio debe ser mayor o igual a 0');
+        return;
+      }
+      if (values.pesado && !values.numPlu?.trim()) {
+        message.error('El identificador de balanza es obligatorio para productos pesados');
+        return;
+      }
+
+      const referenciasLimpias = referencias
+        .map((r) => ({
+          ...r,
+          referencia: (r.referencia || '').trim(),
+          cantidad: r.cantidad > 0 ? r.cantidad : 1,
+        }))
+        .filter((r) => r.referencia !== '');
+
+      const referenciasDuplicadas = referenciasLimpias
+        .map((r) => r.referencia.toUpperCase())
+        .filter((r, i, arr) => arr.indexOf(r) !== i);
+
+      if (referenciasDuplicadas.length > 0) {
+        message.error(`La referencia '${referenciasLimpias.find((r) => r.referencia.toUpperCase() === referenciasDuplicadas[0])?.referencia}' está repetida`);
+        return;
+      }
+      if (referenciasLimpias.some((r) => !r.presentacionEquivalenteID)) {
+        message.error('Debe seleccionar la presentación de cada referencia');
         return;
       }
       if (values.requiereFechaVenc && (!values.diasVencimiento || values.diasVencimiento <= 0)) {
@@ -320,6 +366,7 @@ const ProductoFormulario: React.FC<{ pantalla?: 'MProducto' | 'MServicio' }> = (
         precio: values.precio || 0,
         referenciaInterna: values.referenciaInterna || '',
         upc: values.upc || '',
+        numPlu: values.numPlu?.trim() || '',
         codigoSuplidor: values.codigoSuplidor || '',
         familia: familiaSelected,
         categoria: categoriaSelected,
@@ -332,11 +379,13 @@ const ProductoFormulario: React.FC<{ pantalla?: 'MProducto' | 'MServicio' }> = (
         ultimoCosto: data?.ultimoCosto || 0,
         modificaPrecio: values.modificaPrecio || false,
         modificaDescripcion: values.modificaDescripcion || false,
+        precioAuto: values.precioAuto || false,
         prodserv: esServicio ? 'S' : (values.prodserv || 'P'),
         requiereFechaVenc: values.requiereFechaVenc || false,
         diasVencimiento: values.requiereFechaVenc ? values.diasVencimiento : undefined,
         datosExtra,
         productoControl: productoControlSelected,
+        referencias: referenciasLimpias,
         impuestos: selectedImpuestos.length > 0
           ? selectedImpuestos
               .filter((imp) => imp.idExterno && imp.tipoCodigo && imp.ambito)
@@ -578,7 +627,20 @@ const ProductoFormulario: React.FC<{ pantalla?: 'MProducto' | 'MServicio' }> = (
           </Col>
           <Col xs={24} md={12} xl={8}>
             <Form.Item name="categoria" label="Categoría">
-              <Select allowClear showSearch optionFilterProp="children" placeholder="Seleccionar categoría">
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="children"
+                placeholder="Seleccionar categoría"
+                onChange={(value) => {
+                  const cat = categorias.find((c) => (c.codigo || c.idExterno || '') === value);
+                  if (value && cat?.familia?.idExterno) {
+                    form.setFieldsValue({ familia: cat.familia.idExterno });
+                  } else {
+                    form.setFieldsValue({ familia: undefined });
+                  }
+                }}
+              >
                 {categorias.map((c) => (
                   <Select.Option key={c.codigo || c.idExterno || ''} value={c.codigo || c.idExterno || ''}>
                     {c.nombre ? toTitleCase(c.nombre) : c.codigo}
@@ -772,6 +834,14 @@ const ProductoFormulario: React.FC<{ pantalla?: 'MProducto' | 'MServicio' }> = (
         </span>
       }
     >
+      <div style={{ marginBottom: 16 }}>
+        <Form.Item name="precioAuto" label="Precio Automático" valuePropName="checked" style={{ marginBottom: 4 }}>
+          <Switch />
+        </Form.Item>
+        <div className="paces-text-secondary" style={{ fontSize: 12 }}>
+          Recalcula el precio del artículo a partir del precio de sus componentes
+        </div>
+      </div>
       <ProductoComponentesCard
         codigoProducto={codigo}
         dataSource={componentes}
@@ -779,6 +849,26 @@ const ProductoFormulario: React.FC<{ pantalla?: 'MProducto' | 'MServicio' }> = (
         onImportar={() => setModalImportarComponentesOpen(true)}
         nombresPorCodigo={nombresPorCodigo}
         costosPorCodigo={costosPorCodigo}
+        disabled={saving}
+      />
+    </Card>
+  );
+
+  const renderTabReferencias = () => (
+    <Card
+      className="paces-card"
+      size="small"
+      title="Referencias / Códigos de barra"
+      extra={
+        <span style={{ fontSize: 11 }} className="paces-text-secondary">
+          Códigos alternativos de proveedores
+        </span>
+      }
+    >
+      <ProductoReferenciasCard
+        dataSource={referencias}
+        onChange={setReferencias}
+        unidades={unidades}
         disabled={saving}
       />
     </Card>
@@ -796,11 +886,21 @@ const ProductoFormulario: React.FC<{ pantalla?: 'MProducto' | 'MServicio' }> = (
         <Row gutter={[16, 0]}>
           <Col xs={24} md={12} xl={8}>
             <div style={{ marginBottom: 16 }}>
-              <Form.Item name="pesado" label="Pesado" valuePropName="checked" style={{ marginBottom: 4 }}>
-                <Switch />
-              </Form.Item>
+              <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+                <Form.Item name="pesado" label="Pesado" valuePropName="checked" style={{ marginBottom: 4 }}>
+                  <Switch />
+                </Form.Item>
+                <Form.Item
+                  name="numPlu"
+                  label="Identificador de balanza"
+                  style={{ marginBottom: 4, flex: 1 }}
+                  rules={[{ required: !!pesadoValue, message: 'Requerido para productos pesados' }]}
+                >
+                  <Input maxLength={10} placeholder="Hasta 10 caracteres" />
+                </Form.Item>
+              </div>
               <div className="paces-text-secondary" style={{ fontSize: 12 }}>
-                Indica si el artículo se vende por peso
+                Indica si el artículo se vende por peso. El identificador es obligatorio cuando está marcado
               </div>
             </div>
           </Col>
@@ -1028,6 +1128,13 @@ const ProductoFormulario: React.FC<{ pantalla?: 'MProducto' | 'MServicio' }> = (
           key: 'componentes',
           label: `Componentes (${componentes.length})`,
           children: renderTabComponentes(),
+        }]
+      : []),
+    ...(!esServicio
+      ? [{
+          key: 'referencias',
+          label: `Referencias (${referencias.length})`,
+          children: renderTabReferencias(),
         }]
       : []),
     ...(!esServicio

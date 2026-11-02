@@ -1,0 +1,53 @@
+/* ===== Editor de texto enriquecido (Quill 2) ===== */
+.editor-texto-rico {
+  border: 1px solid var(--paces-border);
+  border-radius: 6px;
+  background: var(--paces-bg-container);
+  overflow: hidden;
+}
+
+.editor-texto-rico .ql-toolbar.ql-snow {
+  border: none;
+  border-bottom: 1px solid var(--paces-border);
+  background: var(--paces-topbar-search-bg, transparent);
+  padding: 4px 8px;
+}
+
+.editor-texto-rico .ql-container.ql-snow {
+  border: none;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.editor-texto-rico .ql-container {
+  min-height: var(--etr-min-height, 120px);
+}
+
+.editor-texto-rico .ql-editor {
+  min-height: var(--etr-min-height, 120px);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--paces-text);
+}
+
+.editor-texto-rico .ql-editor.ql-blank::before {
+  color: var(--paces-text-secondary);
+  font-style: normal;
+}
+
+.editor-texto-rico .ql-editor p,
+.editor-texto-rico .ql-editor ol,
+.editor-texto-rico .ql-editor ul {
+  margin: 0 0 8px;
+}
+
+.editor-texto-rico .ql-editor p:last-child,
+.editor-texto-rico .ql-editor ol:last-child,
+.editor-texto-rico .ql-editor ul:last-child {
+  margin-bottom: 0;
+}
+
+/* Enlace dentro del editor */
+.editor-texto-rico .ql-editor a {
+  color: var(--paces-primary);
+}

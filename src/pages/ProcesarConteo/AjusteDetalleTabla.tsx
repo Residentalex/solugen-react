@@ -16,7 +16,7 @@ const AjusteDetalleTabla: React.FC<{
     loading={cargando}
     locale={{ emptyText: 'No hay artículos para mostrar con este filtro.' }}
     sticky
-    scroll={{ x: 1450 }}
+    scroll={{ x: 1520 }}
     pagination={{
       pageSize: 25,
       showSizeChanger: true,

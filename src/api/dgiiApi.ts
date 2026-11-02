@@ -28,18 +28,18 @@ export const dgiiApi = {
     return data.data;
   },
 
-  obtenerEmitidos: async (desde: dayjs.Dayjs, hasta: dayjs.Dayjs, skip = 0, take = 25): Promise<EnvioDGIIDTO[]> => {
+  obtenerEmitidos: async (desde: dayjs.Dayjs, hasta: dayjs.Dayjs, skip = 0, take = 25): Promise<{ data: EnvioDGIIDTO[]; total: number }> => {
     const { data } = await apiClient.get<ApiResponse<EnvioDGIIDTO[]>>(`${BASE}/emitidos`, {
       params: { desde: formatearFecha(desde), hasta: formatearFecha(hasta), skip, take },
     });
-    return data.data;
+    return { data: data.data || [], total: data.total ?? 0 };
   },
 
-  obtenerPendientes: async (desde: dayjs.Dayjs, hasta: dayjs.Dayjs, skip = 0, take = 25): Promise<EnvioDGIIDTO[]> => {
+  obtenerPendientes: async (desde: dayjs.Dayjs, hasta: dayjs.Dayjs, skip = 0, take = 25): Promise<{ data: EnvioDGIIDTO[]; total: number }> => {
     const { data } = await apiClient.get<ApiResponse<EnvioDGIIDTO[]>>(`${BASE}/pendientes-dashboard`, {
       params: { desde: formatearFecha(desde), hasta: formatearFecha(hasta), skip, take },
     });
-    return data.data;
+    return { data: data.data || [], total: data.total ?? 0 };
   },
 
   marcarEnviado: async (sucursal: number, transaccionID: number): Promise<void> => {
@@ -83,7 +83,8 @@ export const dgiiApi = {
       const prefix = tipoDocumento === 'NC' ? 'Transaccion' : 'DEV';
       const loadResp = await apiClient.get(`/${prefix}/${sucursal}/${transaccionID}`);
       const doc = await extraerDatos(loadResp);
-      const sendResp = await apiClient.post(`/ecf/${sucursal}/NotaCredito/enviar`, doc);
+      const endpoint = tipoDocumento === 'NC' ? 'NotaCredito' : 'Devolucion';
+      const sendResp = await apiClient.post(`/ecf/${sucursal}/${endpoint}/enviar`, doc);
       const body = sendResp.data;
       if (!body?.isSuccess) throw new Error(body?.errorMessage || 'Error al enviar NC a DGII');
       const result = await extraerDatos<{ isSuccess: boolean; errorMessage?: string; urlCodigoQr?: string; eNCF?: string; codigoSeguridad?: string; estadoeCF?: string }>(sendResp);

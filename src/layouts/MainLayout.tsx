@@ -559,7 +559,7 @@ const MainLayout: React.FC = () => {
                 <CalendarOutlined style={{ fontSize: 16 }} />
               </button>
             )}
-            {sucursalesFiltradas.length > 1 && activeModule !== 'dashboard' && activeModule !== 'MUsuario' && activeModule !== 'MPerfil' && activeModule !== 'CFacturasElectronicas' && activeModule !== 'ORepostear' && activeModule !== 'MTicket' && activeModule !== 'notificaciones' && activeModule !== 'MProducto' && activeModule !== 'chat' && activeModule !== 'Actividades' && (
+            {sucursalesFiltradas.length > 1 && activeModule !== 'dashboard' && activeModule !== 'MUsuario' && activeModule !== 'MPerfil' && activeModule !== 'CFacturasElectronicas' && activeModule !== 'ORepostear' && activeModule !== 'MTicket' && activeModule !== 'notificaciones' && activeModule !== 'MProducto' && activeModule !== 'MCategoria' && activeModule !== 'chat' && activeModule !== 'Actividades' && activeModule !== 'R607' && (
               <Select
                 value={sucursalActiva}
                 onChange={(val) => setSucursalActiva(val)}

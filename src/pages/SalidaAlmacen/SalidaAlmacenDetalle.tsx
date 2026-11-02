@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, Input, Typography, Tooltip, Modal, Alert, App, DatePicker, Dropdown, Switch,
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, Input, Typography, Tooltip, Modal, Alert, App, DatePicker, Switch,
 } from 'antd';
 import ColumnVisibilityToggle from '../../components/ColumnVisibilityToggle';
 import type { ColumnConfig } from '../../components/ColumnVisibilityToggle';
@@ -25,7 +25,6 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import ErrorDetalle from '../../components/ErrorDetalle';
-import PermissionGate from '../../components/PermissionGate';
 import { apiClient } from '../../api/client';
 import { documentoImpresionApi } from '../../api/documentoImpresionApi';
 import { salidaAlmacenApi } from '../../api/salidaAlmacenApi';
@@ -674,6 +673,27 @@ const SalidaAlmacenDetalle: React.FC = () => {
         onRevisado={handleRevisado}
         onDesaplicar={async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
+        extraAcciones={id ? [
+          ...(documentoActivo?.concepto?.sucursalDestino?.codigo ? [{
+            key: 'imprimir',
+            label: 'Imprimir',
+            icon: <PrinterOutlined />,
+            soloIcono: true,
+            tooltip: 'Imprimir',
+            loading: imprimiendo,
+            onClick: () => imprimirConFormato('general'),
+            permiso: { accion: 'IMPRIMIR' },
+          }] : [{
+            key: 'imprimir',
+            label: 'Imprimir',
+            icon: <PrinterOutlined />,
+            soloIcono: true,
+            tooltip: 'Imprimir',
+            loading: imprimiendo,
+            permiso: { accion: 'IMPRIMIR' },
+            menu: { items: printMenuItems, onClick: handlePrintMenuClick },
+          }]),
+        ] : undefined}
         extraButtons={id ? (
           <>
             {toEstadoNum(data?.estado) === 3 && reversoData && (
@@ -684,17 +704,6 @@ const SalidaAlmacenDetalle: React.FC = () => {
                 onChange={(checked) => setMostrandoReverso(checked)}
                 style={{ marginLeft: 8 }}
               />
-            )}
-            {documentoActivo?.concepto?.sucursalDestino?.codigo ? (
-              <PermissionGate accion="IMPRIMIR">
-                <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={() => imprimirConFormato('general')} />
-              </PermissionGate>
-            ) : (
-              <PermissionGate accion="IMPRIMIR">
-                <Dropdown menu={{ items: printMenuItems, onClick: handlePrintMenuClick }} trigger={['click']}>
-                  <Button icon={<PrinterOutlined />} loading={imprimiendo} />
-                </Dropdown>
-              </PermissionGate>
             )}
           </>
         ) : undefined}

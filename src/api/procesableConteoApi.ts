@@ -5,6 +5,8 @@ import type {
   AjusteConteoGeneradoDTO,
   AjusteConteoRequestDTO,
   ConteoProcesableDTO,
+  ProcesarConteoCierreRequestDTO,
+  ProcesarConteoCierreResultDTO,
 } from '../types/procesableConteo';
 
 const BASE = '/Procesable';
@@ -57,6 +59,23 @@ export const procesableConteoApi = {
   ): Promise<AjusteConteoGeneradoDTO> => {
     const { data } = await apiClient.post<ApiResponse<AjusteConteoGeneradoDTO>>(
       `${BASE}/${sucursal}/generar-ajuste`,
+      request
+    );
+    return data.data;
+  },
+
+  /**
+   * Flujo completo del conteo fisico: calcula el ajuste, genera la Entrada de
+   * Ajuste (EPJ) y la Salida de Ajuste (SPJ), los APLICA (mueve stock) y
+   * ejecuta el cierre de inventario de la sucursal (snapshot + avance de la
+   * fecha de cierre + recalculo de costos de entrada).
+   */
+  procesarCierre: async (
+    sucursal: number,
+    request: ProcesarConteoCierreRequestDTO
+  ): Promise<ProcesarConteoCierreResultDTO> => {
+    const { data } = await apiClient.post<ApiResponse<ProcesarConteoCierreResultDTO>>(
+      `${BASE}/${sucursal}/procesar-cierre`,
       request
     );
     return data.data;

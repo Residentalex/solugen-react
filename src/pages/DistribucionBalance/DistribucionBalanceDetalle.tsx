@@ -12,7 +12,6 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { distribucionBalanceApi } from '../../api/distribucionBalanceApi';
-import PermissionGate from '../../components/PermissionGate';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
@@ -357,6 +356,15 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
         onRevisado={handleRevisado}
         onReversar={handleReversar}
         confirmActions={false}
+        extraAcciones={[
+          {
+            key: 'recalcular',
+            label: 'Recalcular',
+            icon: <ReloadOutlined />,
+            loading: recalculando,
+            permiso: { permisoEspecial: 'pe_recalcular' },
+          },
+        ]}
         extraButtons={
           <>
             {toEstadoNum(data?.estado) === 3 && reversoData && (
@@ -368,15 +376,6 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
                 style={{ marginLeft: 8 }}
               />
             )}
-            <PermissionGate permisoEspecial="pe_recalcular">
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={handleRecalcular}
-                loading={recalculando}
-              >
-                Recalcular
-              </Button>
-            </PermissionGate>
           </>
         }
       />

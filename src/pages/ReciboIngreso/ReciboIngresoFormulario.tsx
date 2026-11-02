@@ -658,7 +658,7 @@ const ReciboIngresoFormulario: React.FC = () => {
       },
     },
     { title: 'Sucursal', dataIndex: 'sucursal', key: 'sucursal', width: 100, render: (v: string) => v || '-' },
-    { title: 'NCF', dataIndex: 'nCF', key: 'nCF', width: 140, render: (v: string) => v || '-' },
+    { title: 'NCF', dataIndex: 'ncf', key: 'ncf', width: 140, render: (v: string, record: any) => v || record.nCF || '-' },
     { title: 'Monto Original', dataIndex: 'montoOriginal', key: 'montoOriginal', width: 130, align: 'right' as const, render: (v: number) => formatNumber(v) },
     { title: 'Abonado', dataIndex: 'pagado', key: 'pagado', width: 120, align: 'right' as const, render: (v: number) => formatNumber(v) },
     { title: 'Pendiente', dataIndex: 'saldoPendiente', key: 'saldoPendiente', width: 120, align: 'right' as const, render: (_: any, record: TransaccionAsociadaDTO) => <strong>{formatNumber(pendienteEfectivo(record))}</strong> },

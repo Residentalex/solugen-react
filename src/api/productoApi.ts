@@ -22,6 +22,32 @@ export const productoApi = {
     return data.data;
   },
 
+  /** Contadores de artículos por categoría (GRUPOPRO.codigo) */
+  obtenerConteoPorCategoria: async (sucursal: number): Promise<Record<string, number>> => {
+    const { data } = await apiClient.get<ApiResponse<{ codigo: string; total: number }[]>>(
+      `${BASE}/${sucursal}/conteo-categorias`
+    );
+    const mapa: Record<string, number> = {};
+    (data.data || []).forEach((c) => {
+      const codigo = String(c.codigo ?? '').trim();
+      if (codigo) mapa[codigo] = c.total || 0;
+    });
+    return mapa;
+  },
+
+  /** Artículos de una categoría (paginado) */
+  obtenerVistaPorCategoria: async (
+    sucursal: number,
+    categoria: string,
+    params?: { cantidad?: number; salto?: number }
+  ): Promise<{ items: ProductoVistaDTO[]; total: number }> => {
+    const { data } = await apiClient.get<ApiResponse<ProductoVistaDTO[]>>(
+      `${BASE}/${sucursal}/categoria/${encodeURIComponent(categoria)}`,
+      { params }
+    );
+    return { items: data.data ?? [], total: data.total ?? 0 };
+  },
+
   /** Obtener total de productos (con filtros opcionales) */
   obtenerTotal: async (
     sucursal: number,

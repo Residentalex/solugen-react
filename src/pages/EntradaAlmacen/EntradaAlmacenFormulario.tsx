@@ -636,7 +636,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
             ? toISOFormat(values.fechaRecibo.toDate())
             : values.fechaRecibo)
         : null,
-      tipoDocumento: base.tipoDocumento || 1,
+      tipoDocumento: base.tipoDocumento ?? 30,
       noDocumento: base.noDocumento || '',
       estado: base.estado || 0,
       periodo: base.periodo || new Date().getMonth() + 1,
@@ -2146,7 +2146,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
         onClose={() => setConceptoModalOpen(false)}
         onSelect={handleConceptoSelect}
         fetchConceptos={() => conceptosApi.obtenerConceptos(sucursalActiva)}
-        sucursal={data?.concepto?.sucursalDestino?.sucursal ?? data?.sucursal?.sucursal ?? sucursalActiva}
+        sucursal={sucursalActiva}
         documento="ENP"
       />
 

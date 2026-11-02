@@ -1,3 +1,5 @@
+import type { ImportarConteoLineaDTO } from './conteo';
+
 /**
  * Documento procesable de conteo fisico.
  *
@@ -48,10 +50,17 @@ export interface AjusteConteoDTO {
   cantidadSistema: number;
   /** cantidadContada - cantidadSistema. Positivo = ENP, negativo = SAP. */
   cantidadAjuste: number;
+  /** Costo total del sistema (suma de CostoAlterno) a la fecha de corte. */
+  costoSistema?: number;
   costoUnitario: number;
   totalAjuste: number;
   /** Entrada que origino el costo, o 'Maestro'. */
   referencia: string;
+  /**
+   * Advertencia de la linea (por ejemplo, codigo no encontrado en el maestro
+   * de productos). No bloquea el calculo; la pantalla la muestra.
+   */
+  advertencia?: string | null;
   /** Numeros de conteo (INVENT.NOINVENT) que aportaron a esta linea. */
   conteosOrigen: string[];
   /**
@@ -64,12 +73,38 @@ export interface AjusteConteoDTO {
 
 /** Solicitud del calculo de ajuste de un conjunto de conteos unificados. */
 export interface AjusteConteoRequestDTO {
-  codEvento: string;
+  /**
+   * Evento que agrupa a los conteos. Opcional: sin evento hay que indicar
+   * `fecha`.
+   */
+  codEvento?: string;
   inventIds: number[];
   almacen: string;
   /** Fecha de corte en formato yyyyMMddHHmmss. Si se omite, se usa la del evento. */
   fecha?: string;
   cuenta?: string;
+  /**
+   * Cuando es true, agrega al ajuste una linea por cada producto con existencia
+   * distinta de cero en el almacen que NO fue contado, para llevarlo a 0.
+   */
+  incluirNoContados: boolean;
+  /**
+   * Máximo de productos por documento al materializar el ajuste. El backend
+   * divide la EPJ/SPJ en varios documentos si hay más líneas que este límite.
+   * Por defecto 200.
+   */
+  maximoProductosPorDocumento?: number;
+  /**
+   * Usuario que ejecuta la operacion (USUARIOS.CUENTA). Se resuelve a
+   * USUARIOS.USUARIOID y se persiste en INVENTPROC.USUARIOID para trazabilidad
+   * del procesable/ajuste.
+   */
+  usuario?: string;
+  /**
+   * Lineas del Excel para calcular la revision sin leer DINVENT ni validar
+   * conteos. Se usan en la revision previa a persistir el conteo.
+   */
+  lineas?: ImportarConteoLineaDTO[];
 }
 
 /**
@@ -105,4 +140,77 @@ export interface AjusteConteoGeneradoDTO {
   cantidadSalida: number;
   totalEntrada: number;
   totalSalida: number;
+
+  /**
+   * Listas cuando el backend dividió el ajuste en varios documentos por el
+   * límite `maximoProductosPorDocumento`. Cuando hay un solo documento (o el
+   * backend no expone las listas), se usan los campos singulares de arriba.
+   */
+  entradaIds?: number[];
+  salidaIds?: number[];
+  entradaDocumentos?: string[];
+  salidaDocumentos?: string[];
+}
+
+/**
+ * Solicitud del flujo completo de conteo fisico: calcular el ajuste, generar
+ * los documentos EPJ/SPJ, aplicarlos (mueve stock) y cerrar el inventario.
+ */
+export interface ProcesarConteoCierreRequestDTO {
+  /**
+   * Evento que agrupa a los conteos. Opcional: sin evento hay que indicar
+   * `fecha`.
+   */
+  codEvento?: string;
+  inventIds: number[];
+  almacen: string;
+  /** Fecha de corte en formato yyyyMMddHHmmss. Si se omite, se usa la del evento. */
+  fecha?: string;
+  cuenta?: string;
+  usuario?: string;
+  /**
+   * Cuando es true, lleva a 0 la existencia de los productos del almacen que no
+   * fueron contados (agrega una linea de salida por cada uno).
+   */
+  incluirNoContados: boolean;
+  /**
+   * Máximo de productos por documento al materializar el ajuste. El backend
+   * divide la EPJ/SPJ en varios documentos si hay más líneas que este límite.
+   * Por defecto 200.
+   */
+  maximoProductosPorDocumento?: number;
+}
+
+/**
+ * Resumen del flujo completo de conteo fisico. Refleja hasta donde llego el
+ * flujo: documentos generados/aplicados y si el cierre se ejecuto.
+ */
+export interface ProcesarConteoCierreResultDTO {
+  procesableId: number;
+  procesableNo: number;
+  entradaId: number | null;
+  /** Numero de la Entrada de Ajuste (EPJ-NN). Null si no hubo diferencias positivas. */
+  entradaDocumento?: string | null;
+  entradaAplicada: boolean;
+  salidaId: number | null;
+  /** Numero de la Salida de Ajuste (SPJ-NN). Null si no hubo diferencias negativas. */
+  salidaDocumento?: string | null;
+  salidaAplicada: boolean;
+  cierreGenerado: boolean;
+  /**
+   * Explicacion del resultado del cierre cuando no se genero
+   * (cierreGenerado = false), indicando el proximo cierre calculado.
+   * Null cuando el cierre se genero normalmente.
+   */
+  mensajeCierre?: string | null;
+
+  /**
+   * Listas cuando el backend dividió el ajuste en varios documentos por el
+   * límite `maximoProductosPorDocumento`. Cuando hay un solo documento (o el
+   * backend no expone las listas), se usan los campos singulares de arriba.
+   */
+  entradaIds?: number[];
+  salidaIds?: number[];
+  entradaDocumentos?: string[];
+  salidaDocumentos?: string[];
 }

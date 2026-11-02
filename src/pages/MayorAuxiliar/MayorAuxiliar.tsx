@@ -325,12 +325,12 @@ const MayorAuxiliar: React.FC = () => {
   const obtenerCompanyInfo = useCallback(async () => {
     let companyInfo = { nombre: 'SOLUGEN S.R.L.', direccion: '', telefono: '', rnc: '' };
     try {
-      const lista = await companiaApi.obtenerTodas(sucursalActiva);
-      if (lista.length > 0) {
-        companyInfo.nombre = lista[0].nombre ?? companyInfo.nombre;
-        companyInfo.direccion = lista[0].direccion ?? '';
-        companyInfo.telefono = lista[0].telefono ?? '';
-        companyInfo.rnc = lista[0].rnc ?? '';
+      const compania = await companiaApi.obtenerActiva(sucursalActiva);
+      if (compania) {
+        companyInfo.nombre = compania.nombre ?? companyInfo.nombre;
+        companyInfo.direccion = compania.direccion ?? '';
+        companyInfo.telefono = compania.telefono ?? '';
+        companyInfo.rnc = compania.rnc ?? '';
       }
     } catch { /* ignora */ }
     return companyInfo;
@@ -346,14 +346,11 @@ const MayorAuxiliar: React.FC = () => {
     const filtroDoc = tipoDocumento || 'Todos';
 
     if (detallado) {
-      const columnHeaders = ['Fecha', 'Documento', 'Entidad', 'No. Cuenta', 'Nombre Cuenta', 'Tipo', 'Debito', 'Credito', 'Balance'];
+      const columnHeaders = ['Fecha', 'Documento', 'Entidad', 'Debito', 'Credito', 'Balance'];
       const dataRows = datosFiltrados.map((r) => [
         dayjs(r.fechaDocumento).format('DD/MM/YYYY'),
         r.documentoCodigo === 'Existencia' ? 'Balance Anterior' : `${r.documentoCodigo}-${r.documentoNoDocumento}`,
         r.entidadNombre,
-        r.cuentaContableNoCuenta,
-        r.cuentaContableNombre,
-        r.tipoAsiento.trim(),
         r.tipoAsiento.trim() === 'Debito' ? r.montoAlterno : 0,
         r.tipoAsiento.trim() === 'Credito' ? r.montoAlterno : 0,
         r.balance,
@@ -371,7 +368,8 @@ const MayorAuxiliar: React.FC = () => {
         columnHeaders,
         dataRows,
         sheetName: 'MayorAuxiliar',
-        columnWidths: [{ wch: 12 }, { wch: 18 }, { wch: 22 }, { wch: 14 }, { wch: 22 }, { wch: 8 }, { wch: 14 }, { wch: 14 }, { wch: 16 }],
+        columnWidths: [{ wch: 12 }, { wch: 18 }, { wch: 22 }, { wch: 14 }, { wch: 14 }, { wch: 16 }],
+        numericColumns: [3, 4, 5],
       });
     } else {
       const columnHeaders = ['Codigo', 'Nombre', 'Desde', 'Hasta', 'Total Debito', 'Total Credito'];
@@ -397,6 +395,7 @@ const MayorAuxiliar: React.FC = () => {
         dataRows,
         sheetName: 'MayorAuxiliar',
         columnWidths: [{ wch: 8 }, { wch: 22 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 14 }],
+        numericColumns: [4, 5],
       });
     }
   }, [obtenerCompanyInfo, datosFiltrados, gruposDocumento, detallado, fechas, cuentasSeleccionadas, tipoDocumento]);
@@ -410,14 +409,11 @@ const MayorAuxiliar: React.FC = () => {
     const busqueda = busquedaPorCuenta[resultado.cuenta.noCuenta] || '';
     const itemsCuenta = filtrarItems(resultado.items, busqueda);
 
-    const columnHeaders = ['Fecha', 'Documento', 'Entidad', 'No. Cuenta', 'Nombre Cuenta', 'Tipo', 'Debito', 'Credito', 'Balance'];
+    const columnHeaders = ['Fecha', 'Documento', 'Entidad', 'Debito', 'Credito', 'Balance'];
     const dataRows = itemsCuenta.map((r) => [
       dayjs(r.fechaDocumento).format('DD/MM/YYYY'),
       r.documentoCodigo === 'Existencia' ? 'Balance Anterior' : `${r.documentoCodigo}-${r.documentoNoDocumento}`,
       r.entidadNombre,
-      r.cuentaContableNoCuenta,
-      r.cuentaContableNombre,
-      r.tipoAsiento.trim(),
       r.tipoAsiento.trim() === 'Debito' ? r.montoAlterno : 0,
       r.tipoAsiento.trim() === 'Credito' ? r.montoAlterno : 0,
       r.balance,
@@ -435,7 +431,8 @@ const MayorAuxiliar: React.FC = () => {
       columnHeaders,
       dataRows,
       sheetName: `Cuenta_${resultado.cuenta.noCuenta}`,
-      columnWidths: [{ wch: 12 }, { wch: 18 }, { wch: 22 }, { wch: 14 }, { wch: 22 }, { wch: 8 }, { wch: 14 }, { wch: 14 }, { wch: 16 }],
+      columnWidths: [{ wch: 12 }, { wch: 18 }, { wch: 22 }, { wch: 14 }, { wch: 14 }, { wch: 16 }],
+      numericColumns: [3, 4, 5],
     });
   }, [obtenerCompanyInfo, fechas, tipoDocumento, busquedaPorCuenta]);
 
@@ -445,37 +442,67 @@ const MayorAuxiliar: React.FC = () => {
     const hastaStr = dayjs(fechas[1]).format('DD/MM/YYYY');
     const filtroDoc = tipoDocumento || 'Todos';
 
-    const columnHeaders = ['Fecha', 'Documento', 'Entidad', 'No. Cuenta', 'Nombre Cuenta', 'Tipo', 'Debito', 'Credito', 'Balance'];
-    const columnWidths = [{ wch: 12 }, { wch: 18 }, { wch: 22 }, { wch: 14 }, { wch: 22 }, { wch: 8 }, { wch: 14 }, { wch: 14 }, { wch: 16 }];
+    const columnHeaders = ['Fecha', 'Documento', 'Entidad', 'Debito', 'Credito', 'Balance'];
+    const columnWidths = [{ wch: 12 }, { wch: 18 }, { wch: 22 }, { wch: 14 }, { wch: 14 }, { wch: 16 }];
 
-    const sheets = resultadosPorCuenta.map((resultado) => {
-      const filtroCta = `${resultado.cuenta.noCuenta} - ${toTitleCase(resultado.cuenta.nombre)}`;
-      const dataRows = resultado.items.map((r) => [
+    const todasHeaders = ['No. Cuenta', 'Nombre Cuenta', ...columnHeaders];
+    const todasColumnWidths = [{ wch: 14 }, { wch: 24 }, ...columnWidths];
+    const todasRows = resultadosPorCuenta.flatMap((resultado) => {
+      return resultado.items.map((r) => [
+        resultado.cuenta.noCuenta,
+        resultado.cuenta.nombre,
         dayjs(r.fechaDocumento).format('DD/MM/YYYY'),
         r.documentoCodigo === 'Existencia' ? 'Balance Anterior' : `${r.documentoCodigo}-${r.documentoNoDocumento}`,
         r.entidadNombre,
-        r.cuentaContableNoCuenta,
-        r.cuentaContableNombre,
-        r.tipoAsiento.trim(),
         r.tipoAsiento.trim() === 'Debito' ? r.montoAlterno : 0,
         r.tipoAsiento.trim() === 'Credito' ? r.montoAlterno : 0,
         r.balance,
       ]);
-      return {
-        sheetName: resultado.cuenta.noCuenta,
+    });
+
+    const sheets = [
+      {
+        sheetName: 'Todas',
         extraHeaderRows: [
           [companyInfo.direccion],
           [`Tel.: ${companyInfo.telefono}`],
           [`RNC: ${companyInfo.rnc}`],
           ['REPORTE MAYOR AUXILIAR'],
-          [`Periodo: ${desdeStr} - ${hastaStr}  |  Cuenta: ${filtroCta}  |  Doc: ${filtroDoc}`],
+          [`Periodo: ${desdeStr} - ${hastaStr}  |  Cuenta: Todas (${resultadosPorCuenta.length} cuentas)  |  Doc: ${filtroDoc}`],
           [],
         ],
-        columnHeaders,
-        dataRows,
-        columnWidths,
-      };
-    });
+        columnHeaders: todasHeaders,
+        dataRows: todasRows,
+        columnWidths: todasColumnWidths,
+        numericColumns: [5, 6, 7],
+      },
+      ...resultadosPorCuenta.map((resultado) => {
+        const filtroCta = `${resultado.cuenta.noCuenta} - ${toTitleCase(resultado.cuenta.nombre)}`;
+        const dataRows = resultado.items.map((r) => [
+          dayjs(r.fechaDocumento).format('DD/MM/YYYY'),
+          r.documentoCodigo === 'Existencia' ? 'Balance Anterior' : `${r.documentoCodigo}-${r.documentoNoDocumento}`,
+          r.entidadNombre,
+          r.tipoAsiento.trim() === 'Debito' ? r.montoAlterno : 0,
+          r.tipoAsiento.trim() === 'Credito' ? r.montoAlterno : 0,
+          r.balance,
+        ]);
+        return {
+          sheetName: resultado.cuenta.noCuenta,
+          extraHeaderRows: [
+            [companyInfo.direccion],
+            [`Tel.: ${companyInfo.telefono}`],
+            [`RNC: ${companyInfo.rnc}`],
+            ['REPORTE MAYOR AUXILIAR'],
+            [`Periodo: ${desdeStr} - ${hastaStr}  |  Cuenta: ${filtroCta}  |  Doc: ${filtroDoc}`],
+            [],
+          ],
+          columnHeaders,
+          dataRows,
+          columnWidths,
+          numericColumns: [3, 4, 5],
+        };
+      }),
+    ];
 
     exportToExcelMultiSheet({
       companyName: companyInfo.nombre,

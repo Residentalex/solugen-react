@@ -90,6 +90,7 @@ export interface DevolucionAsociadaDTO {
   saldoPendiente?: number;
   monto: number;         // monto asignado (subtotal)
   impuesto?: number;     // impuesto de la devolución
+  compania?: any;        // compania/sucursal de la devolución (incluye centroCosto)
   esDocumentoInventario: boolean;
   perdida?: number;
   generarPerdida?: boolean;

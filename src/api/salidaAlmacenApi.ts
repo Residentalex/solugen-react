@@ -1,5 +1,12 @@
 import { apiClient } from './client';
-import type { MovimientoVistaDTO, ConceptoDTO, AlmacenDTO, SuplidorDTO } from '../types/entradaAlmacen';
+import type {
+  MovimientoVistaDTO,
+  ConceptoDTO,
+  AlmacenDTO,
+  SuplidorDTO,
+  ReporteInventarioDocumentoDTO,
+  ReporteInventarioFiltros,
+} from '../types/entradaAlmacen';
 import type { FiltroSAP, SalidaAlmacenDTO, SalidaAlmacenFullDTO } from '../types/salidaAlmacen';
 import type { ApiResponse } from '../types/auth';
 
@@ -41,6 +48,17 @@ export const salidaAlmacenApi = {
 
     const { data } = await apiClient.get<ApiResponse<MovimientoVistaDTO[]>>(`${BASE}/${sucursal}/filtrar`, { params });
     return { data: data.data || [], total: data.total ?? 0 };
+  },
+
+  obtenerDetallado: async (
+    sucursal: number,
+    params: ReporteInventarioFiltros
+  ): Promise<{ data: ReporteInventarioDocumentoDTO[]; total: number }> => {
+    const { data } = await apiClient.get<ApiResponse<ReporteInventarioDocumentoDTO[]>>(
+      `${BASE}/${sucursal}/detallado`,
+      { params }
+    );
+    return { data: data.data ?? [], total: data.total ?? 0 };
   },
 
   obtenerPorId: async (sucursal: number, id: number): Promise<SalidaAlmacenFullDTO> => {

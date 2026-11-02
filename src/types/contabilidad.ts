@@ -220,3 +220,19 @@ export interface SecuenciaNCFListDTO {
   fechaVencimiento?: string;
   activo: boolean;
 }
+
+// --- Reporte de Asientos de Inventario ---
+
+/** Fila del reporte de asientos de inventario, agrupada por cuenta contable y tipo de documento. */
+export interface ReporteAsientosInventarioItem {
+  cuentaContableNoCuenta: string;
+  cuentaContableNombre: string;
+  documentoNombre: string;
+  debitos: number;
+  creditos: number;
+  montoAuxiliar: number;
+}
+
+export interface ReporteAsientosInventarioDatosResponse {
+  items: ReporteAsientosInventarioItem[];
+}

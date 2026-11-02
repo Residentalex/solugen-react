@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tag, Button, Row, Col, Grid,
-  message, Typography, Descriptions, Modal, Tooltip,
+  Card, Table, Tag, Row, Col, Grid,
+  message, Typography, Descriptions, Modal,
 } from 'antd';
 import {
   ExclamationCircleOutlined, CheckCircleOutlined, PrinterOutlined,
@@ -11,7 +11,6 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { plantillaSuplidorApi } from '../../api/plantillaSuplidorApi';
 import { analisisCompraApi } from '../../api/analisisCompraApi';
-import PermissionGate from '../../components/PermissionGate';
 import type { PlantillaSuplidorDTO, DetallePlantillaSuplidorDTO } from '../../types/plantillaSuplidor';
 import DetalleCatalogoLayout from '../../components/DetalleCatalogoLayout';
 
@@ -263,26 +262,30 @@ const PlantillaSuplidorDetalle: React.FC = () => {
       onEliminar={handleEliminar}
       eliminando={saving}
       bloqueado={ocupado}
-      extraActions={
-        <>
-          <PermissionGate accion="PROCESAR">
-            <Tooltip title="Imprimir">
-              <Button icon={<PrinterOutlined />} loading={imprimiendo} disabled={ocupado} onClick={handleImprimir} aria-label="Imprimir" />
-            </Tooltip>
-          </PermissionGate>
-          <PermissionGate accion="PROCESAR">
-            <Button
-              type="primary"
-              icon={<CheckCircleOutlined />}
-              loading={generando}
-              disabled={ocupado}
-              onClick={handleGenerarAnalisis}
-            >
-              Generar Análisis
-            </Button>
-          </PermissionGate>
-        </>
-      }
+      extraAcciones={[
+        {
+          key: 'imprimir',
+          label: 'Imprimir',
+          icon: <PrinterOutlined />,
+          soloIcono: true,
+          tooltip: 'Imprimir',
+          loading: imprimiendo,
+          disabled: ocupado,
+          onClick: handleImprimir,
+          permiso: { accion: 'PROCESAR' },
+        },
+        {
+          key: 'generar-analisis',
+          label: 'Generar Análisis',
+          icon: <CheckCircleOutlined />,
+          tipo: 'primary',
+          loading: generando,
+          disabled: ocupado,
+          onClick: handleGenerarAnalisis,
+          permiso: { accion: 'PROCESAR' },
+          prioridad: 100,
+        },
+      ]}
     >
       {isLarge ? (
         <Row gutter={16}>

@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { PuntoVentaDTO, MetodoPagoDTO } from '../types/facturacion';
+import type { PuntoVentaDTO, MetodoPagoDTO, DocumentoTipoDTO } from '../types/facturacion';
 import type { ApiResponse } from '../types/auth';
 
 const BASE = '/POS';
@@ -39,5 +39,22 @@ export const puntoVentaApi = {
     return data;
   },
 
+  crearMetodoPago: async (sucursal: number, dto: MetodoPagoDTO): Promise<number> => {
+    const { data } = await apiClient.post<ApiResponse<number>>(`${BASE}/${sucursal}/metodos-pago`, dto);
+    return data.data;
+  },
+
+  actualizarMetodoPago: async (sucursal: number, dto: MetodoPagoDTO): Promise<void> => {
+    await apiClient.put<ApiResponse<boolean>>(`${BASE}/${sucursal}/metodos-pago`, dto);
+  },
+
+  eliminarMetodoPago: async (sucursal: number, id: number): Promise<void> => {
+    await apiClient.delete(`${BASE}/${sucursal}/metodos-pago/${id}`);
+  },
+
+  obtenerDocumentos: async (sucursal: number): Promise<DocumentoTipoDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<DocumentoTipoDTO[]>>(`${BASE}/${sucursal}/documentos`);
+    return data.data;
+  },
 
 };

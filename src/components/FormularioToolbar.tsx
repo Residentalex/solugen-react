@@ -1,8 +1,8 @@
 import React from 'react';
-import { Space, Button, Tag } from 'antd';
+import { Space, Tag } from 'antd';
 import { SaveOutlined, CloseOutlined } from '@ant-design/icons';
 import { ESTADO_DOCUMENTO_MAP } from '../utils/estadoDocumento';
-import PermissionGate from './PermissionGate';
+import ToolbarAcciones from './ToolbarAcciones';
 
 interface FormularioToolbarProps {
   saving?: boolean;
@@ -22,16 +22,28 @@ const FormularioToolbar: React.FC<FormularioToolbarProps> = ({
     <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8, flexWrap: 'wrap' }}>
       {children}
       <div style={{ flex: 1 }} />
-      <Space wrap>
-        <PermissionGate accion={mode === 'editar' ? 'EDITAR' : 'CREAR'}>
-          <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={onGuardar}>
-            Guardar
-          </Button>
-        </PermissionGate>
-        <Button icon={<CloseOutlined />} disabled={bloqueado || saving} onClick={onCancelar}>
-          Cancelar
-        </Button>
-      </Space>
+      <ToolbarAcciones
+        acciones={[
+          {
+            key: 'guardar',
+            label: 'Guardar',
+            icon: <SaveOutlined />,
+            tipo: 'primary',
+            loading: saving,
+            onClick: onGuardar,
+            permiso: { accion: mode === 'editar' ? 'EDITAR' : 'CREAR' },
+            prioridad: 100,
+          },
+          {
+            key: 'cancelar',
+            label: 'Cancelar',
+            icon: <CloseOutlined />,
+            disabled: bloqueado || saving,
+            onClick: onCancelar,
+            prioridad: 90,
+          },
+        ]}
+      />
     </div>
   );
 };

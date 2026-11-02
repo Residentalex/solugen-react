@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, Input, message, Modal, Tooltip, Typography, QRCode, Badge, Dropdown
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, Input, message, Modal, Tooltip, Typography, QRCode, Badge
 } from 'antd';
 import type { MenuProps } from 'antd';
 import {
@@ -45,6 +45,7 @@ import { obtenerLogoEscPosBase64 } from '../../utils/logoEscPos';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import CobrosMinimal from '../../components/CobrosCard/CobrosMinimal';
+import RealizarPagoModal from '../../components/RealizarPagoModal/RealizarPagoModal';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import ErrorDetalle from '../../components/ErrorDetalle';
 import DetalleToolbar from '../../components/DetalleToolbar';
@@ -95,6 +96,7 @@ const FacturaPOSDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
+  const usuario = useAuthStore((s) => s.usuario);
 
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
@@ -115,6 +117,7 @@ const FacturaPOSDetalle: React.FC = () => {
   const [modalAnularOpen, setModalAnularOpen] = useState(false);
   const [razonAnulacion, setRazonAnulacion] = useState('');
   const [anulando, setAnulando] = useState(false);
+  const [realizarPagoOpen, setRealizarPagoOpen] = useState(false);
   const monedaDefault = getMonedaSucursalActiva();
   const screens = Grid.useBreakpoint();
   const qz = useQZTray();
@@ -161,23 +164,31 @@ const FacturaPOSDetalle: React.FC = () => {
   useEffect(() => {
     if (!data?.id) return;
     transaccionApi.obtenerDevolucionesPorPV(sucursalActiva, data.id)
-      .then((devs) => {
-        setDevolucionesPV(devs);
-        if (devs.length > 0) {
-          Promise.all(
-            devs.map((d: any) =>
-              devolucionVentaApi.obtenerPorId(sucursalActiva, d.id)
-                .then((dev: any) => (dev.detalles || []).map((det: any) => Number(det.idAsociado)))
-                .catch(() => [] as number[])
-            )
-          ).then((results) => {
-            const set = new Set<number>();
-            for (const ids of results) ids.forEach((id: number) => set.add(id));
-            setDtransasocDevueltos(set);
-          });
-        }
+      .then(async (devs) => {
+        const detalladas = await Promise.all(
+          devs.map(async (d: any) => {
+            try {
+              const dev = await devolucionVentaApi.obtenerPorId(sucursalActiva, d.id);
+              return {
+                fila: { ...d, monto: Number(dev?.total) || 0 },
+                ids: (dev?.detalles || []).map((det: any) => Number(det.idAsociado)),
+              };
+            } catch (err: any) {
+              message.error(err?.response?.data?.errorMessage || 'Error cargando el total de la devolución');
+              return { fila: { ...d, monto: 0 }, ids: [] as number[] };
+            }
+          })
+        );
+
+        setDevolucionesPV(detalladas.map((x) => x.fila));
+
+        const set = new Set<number>();
+        for (const x of detalladas) x.ids.forEach((id: number) => set.add(id));
+        setDtransasocDevueltos(set);
       })
-      .catch((err: any) => console.error('Error cargando devoluciones PV:', err));
+      .catch((err: any) =>
+        message.error(err?.response?.data?.errorMessage || 'Error cargando devoluciones de la venta')
+      );
   }, [data?.id, sucursalActiva]);
 
   useEffect(() => {
@@ -234,6 +245,29 @@ const FacturaPOSDetalle: React.FC = () => {
 
   const totalPagado = (data.cobros || []).reduce((sum: number, c: any) => sum + (Number(c.pago) || 0), 0);
   const saldoPendiente = Math.max(0, (Number(data.total) || 0) - totalPagado);
+
+  // Notas de credito / devoluciones asociadas al PV (via DOCASOC), para mostrarlas
+  // en la tarjeta de Cobros y pasarlas al modal "Realizar pago".
+  const notasCreditoAsociadas = (data.transaccionesAsociadas || [])
+    .filter((r) => {
+      const doc = (r.documento || '').toUpperCase();
+      return doc.startsWith('NC') || doc.startsWith('DEV');
+    });
+
+  // Edicion de cobros: solo documento Aplicado (estado 1), no anulado y periodo abierto,
+  // y con el permiso especial pe_modificar_pagos.
+  const tienePermisoModificarPagos = (usuario?.permisosEspeciales || []).some(
+    (p) => p.codigo?.toUpperCase() === 'PE_MODIFICAR_PAGOS' && p.valor === true
+  );
+  const puedeEditarCobros = data.estado === 1 && !esCerrado && tienePermisoModificarPagos;
+
+  const handleEditarCobros = () => setRealizarPagoOpen(true);
+
+  const handleGuardadoCobros = () => {
+    // Recargar cobros y documentos NC/DEV asociados tras guardar.
+    reintentarSeccion('cobros');
+    reintentarSeccion('relacionados');
+  };
 
   // ═══ Filtrado y totales de detalles ═══
   const detallesFiltrados = detalleSearch
@@ -798,45 +832,52 @@ const FacturaPOSDetalle: React.FC = () => {
         onAnular={handleAnular}
         onPostear={handlePostear}
         confirmActions={false}
+        extraAcciones={[
+          {
+            key: 'imprimir',
+            label: 'Imprimir',
+            icon: <PrinterOutlined />,
+            soloIcono: true,
+            tooltip: 'Imprimir',
+            loading: imprimiendo,
+            permiso: { codigoPantalla: screenCode, accion: 'IMPRIMIR' },
+            menu: { items: printMenuItems, onClick: handlePrintMenuClick },
+          },
+          ...(data.documento?.codigo === 'PV' && data.estado !== 0 && data.estado !== 3 && saldoPendiente > 0.01 && data.diasCredito > 0 ? [{
+            key: 'generar-pvc',
+            label: 'Generar PVC',
+            icon: <CreditCardOutlined />,
+            onClick: handleGenerarPVC,
+          }] : []),
+          ...(data.estado !== 0 && data.estado !== 3 && dtransasocDevueltos.size < (data.detalles?.length || 0) ? [{
+            key: 'crear-devolucion',
+            label: 'Crear Devolución',
+            icon: <RollbackOutlined />,
+            tipo: 'primary' as const,
+            permiso: { codigoPantalla: 'FPV', permisoEspecial: 'pe_crear_devolucion' },
+            menu: {
+              items: [
+                { key: 'anular', label: 'Anular', icon: <CloseCircleOutlined /> },
+                { key: 'devolver', label: 'Devolver', icon: <RollbackOutlined /> },
+              ],
+              onClick: ({ key }) => {
+                if (key === 'anular') {
+                  setModalAnularOpen(true);
+                } else if (key === 'devolver') {
+                  navigate(`/FDEV/nuevo?pvId=${data.id}`);
+                }
+              },
+            },
+          }] : []),
+        ]}
         extraButtons={
-          <>
-            <PermissionGate codigoPantalla={screenCode} accion="IMPRIMIR">
-              <Dropdown menu={{ items: printMenuItems, onClick: handlePrintMenuClick }} trigger={['click']}>
-                <Button icon={<PrinterOutlined />} loading={imprimiendo} />
-              </Dropdown>
-              {qz.printerName && (
-                <Tag color="success" style={{ marginLeft: 2, fontSize: 11, lineHeight: '18px' }}>
-                  QZ: {qz.printerName}
-                </Tag>
-              )}
-            </PermissionGate>
-            {data.documento?.codigo === 'PV' && data.estado !== 0 && data.estado !== 3 && saldoPendiente > 0.01 && data.diasCredito > 0 && (
-              <Button icon={<CreditCardOutlined />} onClick={handleGenerarPVC}>
-                Generar PVC
-              </Button>
+          <PermissionGate codigoPantalla={screenCode} accion="IMPRIMIR">
+            {qz.printerName && (
+              <Tag color="success" style={{ marginLeft: 2, fontSize: 11, lineHeight: '18px' }}>
+                QZ: {qz.printerName}
+              </Tag>
             )}
-            {data.estado !== 0 && data.estado !== 3 && dtransasocDevueltos.size < (data.detalles?.length || 0) && (
-              <PermissionGate codigoPantalla="FPV" permisoEspecial="pe_crear_devolucion">
-                <Dropdown menu={{
-                  items: [
-                    { key: 'anular', label: 'Anular', icon: <CloseCircleOutlined /> },
-                    { key: 'devolver', label: 'Devolver', icon: <RollbackOutlined /> },
-                  ],
-                  onClick: ({ key }) => {
-                    if (key === 'anular') {
-                      setModalAnularOpen(true);
-                    } else if (key === 'devolver') {
-                      navigate(`/FDEV/nuevo?pvId=${data.id}`);
-                    }
-                  },
-                }} trigger={['click']}>
-                  <Button type="primary" icon={<RollbackOutlined />}>
-                    Crear Devolución
-                  </Button>
-                </Dropdown>
-              </PermissionGate>
-            )}
-          </>
+          </PermissionGate>
         }
       />
 
@@ -930,17 +971,18 @@ const FacturaPOSDetalle: React.FC = () => {
                                 <Table.Summary.Cell index={2} align="right">
                                   {formatNumber(totalesDetalles.cantidad)}
                                 </Table.Summary.Cell>
-                                <Table.Summary.Cell index={3} align="right" responsive={['md', 'lg', 'xl', 'xxl']}>
-                                  {formatNumber(totalesDetalles.subTotal)}
-                                </Table.Summary.Cell>
-                                <Table.Summary.Cell index={4} align="right" responsive={['lg', 'xl', 'xxl']}>
+                                <Table.Summary.Cell index={3} />
+                                <Table.Summary.Cell index={4} align="right">
                                   {formatNumber(totalesDetalles.descuento)}
                                 </Table.Summary.Cell>
-                                <Table.Summary.Cell index={5} align="right" responsive={['lg', 'xl', 'xxl']}>
-                                  {formatNumber(totalesDetalles.impuestos)}
+                                <Table.Summary.Cell index={5} align="right">
+                                  {formatNumber(totalesDetalles.subTotal)}
                                 </Table.Summary.Cell>
                                 <Table.Summary.Cell index={6} align="right">
-                                  <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(totalesDetalles.total)}</Text>
+                                  {formatNumber(totalesDetalles.impuestos)}
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell index={7} align="right">
+                                  <Text strong style={{ color: 'var(--spaces-primary)' }}>{formatNumber(totalesDetalles.total)}</Text>
                                 </Table.Summary.Cell>
                               </Table.Summary.Row>
                             </Table.Summary>
@@ -987,7 +1029,7 @@ const FacturaPOSDetalle: React.FC = () => {
                                   <Table.Summary.Cell index={2} align="right">
                                     <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(totalMonto)}</Text>
                                   </Table.Summary.Cell>
-                                  <Table.Summary.Cell index={3} />
+                                <Table.Summary.Cell index={3} align="right">&nbsp;</Table.Summary.Cell>
                                 </Table.Summary.Row>
                               </Table.Summary>
                             );
@@ -1130,7 +1172,7 @@ const FacturaPOSDetalle: React.FC = () => {
               monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
               tasa={data.tasa ?? 1}
             />
-            <CobrosMinimal cobrosPOS={data.cobros?.[0]} loading={loading} />
+            <CobrosMinimal cobrosPOS={data.cobros?.[0]} notasCredito={notasCreditoAsociadas} loading={loading} onEditar={puedeEditarCobros ? handleEditarCobros : undefined} />
             <DocumentosRelacionadosCard
               documentos={documentosRelacionados}
               currentId={data?.id}
@@ -1233,17 +1275,18 @@ const FacturaPOSDetalle: React.FC = () => {
                               <Table.Summary.Cell index={2} align="right">
                                 {formatNumber(totalesDetalles.cantidad)}
                               </Table.Summary.Cell>
-                              <Table.Summary.Cell index={3} align="right" responsive={['md', 'lg', 'xl', 'xxl']}>
-                                {formatNumber(totalesDetalles.subTotal)}
-                              </Table.Summary.Cell>
-                              <Table.Summary.Cell index={4} align="right" responsive={['lg', 'xl', 'xxl']}>
+                              <Table.Summary.Cell index={3} align="right">&nbsp;</Table.Summary.Cell>
+                              <Table.Summary.Cell index={4} align="right">
                                 {formatNumber(totalesDetalles.descuento)}
                               </Table.Summary.Cell>
-                              <Table.Summary.Cell index={5} align="right" responsive={['lg', 'xl', 'xxl']}>
-                                {formatNumber(totalesDetalles.impuestos)}
+                              <Table.Summary.Cell index={5} align="right">
+                                {formatNumber(totalesDetalles.subTotal)}
                               </Table.Summary.Cell>
                               <Table.Summary.Cell index={6} align="right">
-                                <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(totalesDetalles.total)}</Text>
+                                {formatNumber(totalesDetalles.impuestos)}
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={7} align="right">
+                                <Text strong style={{ color: 'var(--spaces-primary)' }}>{formatNumber(totalesDetalles.total)}</Text>
                               </Table.Summary.Cell>
                             </Table.Summary.Row>
                           </Table.Summary>
@@ -1423,7 +1466,7 @@ const FacturaPOSDetalle: React.FC = () => {
               monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
               tasa={data.tasa ?? 1}
             />
-            <CobrosMinimal cobrosPOS={data.cobros?.[0]} loading={loading} />
+            <CobrosMinimal cobrosPOS={data.cobros?.[0]} notasCredito={notasCreditoAsociadas} loading={loading} onEditar={puedeEditarCobros ? handleEditarCobros : undefined} />
             {data?.envioDGII?.codigoQR && (
               <div style={{ textAlign: 'center' }}>
                 <QRCode value={data.envioDGII.codigoQR} size={140} />
@@ -1511,6 +1554,19 @@ const FacturaPOSDetalle: React.FC = () => {
           handlePrintTicket();
         }}
         onClose={() => { setPrinterModalOpen(false); }}
+      />
+
+      {/* Modal editar cobros (Realizar pago) */}
+      <RealizarPagoModal
+        open={realizarPagoOpen}
+        onClose={() => setRealizarPagoOpen(false)}
+        sucursal={sucursalActiva}
+        facturaID={data.id}
+        cobros={data.cobros?.[0]}
+        documentosAsociados={notasCreditoAsociadas}
+        cliente={data.cliente}
+        total={data.total}
+        onGuardado={handleGuardadoCobros}
       />
 
     </div>

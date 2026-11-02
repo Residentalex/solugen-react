@@ -260,6 +260,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
             monto: x.monto,
             pagado: x.pagado || 0,
             impuesto: x.impuesto || 0,
+            compania: x.compania,
             esDocumentoInventario: true,
             perdida: x.perdida || 0,
             generarPerdida: false,
@@ -462,7 +463,6 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       }
       if (entidadCloneNorm) {
         setEntidadesCache([entidadCloneNorm as any]);
-        console.log('[DEBUG ND] entidadCloneNorm', entidadCloneNorm);
       }
       // Normalizar sucursal (clonado)
       const sucursalCloneNorm = cloneData.sucursal ? {
@@ -491,6 +491,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         monto: x.monto,
         pagado: x.pagado || 0,
         impuesto: x.impuesto || 0,
+        compania: x.compania,
         esDocumentoInventario: true,
         perdida: x.perdida || 0,
         generarPerdida: false,
@@ -531,8 +532,6 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         servicios: cloneData.servicios || 0,
       });
       setMontoTotalConfirmado(Number(cloneData.total) || 0);
-      console.log('[DEBUG ND] selectedEntidad', selectedEntidad);
-      console.log('[DEBUG ND] entidadesCache', entidadesCache);
 
       // Cargar sucursales cache
       conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursalesCache).catch(() => {});
@@ -706,6 +705,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           saldoPendiente: d.saldoPendiente,
           monto: d.monto,
           impuesto: d.impuesto || 0,
+          compania: d.compania,
           esDocumentoInventario: true,
           perdida: 0,
           generarPerdida: false,
@@ -953,7 +953,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
 
     // Asegurar entidad con tipoEntidad
     const tipoEntidadStr = tipoEntidad;
-    const entidadBaseObj = base.entidad || entidadSel || { nombre: '', codigo: '', identificacion: '' };
+    const entidadBaseObj = entidadSel || base.entidad || { nombre: '', codigo: '', identificacion: '' };
     const entidad = {
       ...entidadBaseObj,
       cuentaContable: entidadBaseObj.cuentaContable,
@@ -1004,6 +1004,8 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         fecha: d.fecha,
         montoOriginal: d.montoOriginal,
         monto: d.monto,
+        impuesto: d.impuesto || 0,
+        compania: d.compania,
         perdida: d.perdida || 0,
         esDocumentoInventario: true,
         tipoDocumento: 24,    // TipoDocumento.DVC = 24
@@ -1654,6 +1656,7 @@ label: `Asientos (${asientos.length})`,
                 onChange={setAsientos}
                 editable={true}
                 onGenerar={handleGenerarAsientos}
+                onLimpiar={() => { setAsientos([]); setErrorGeneracion(null); }}
                 generando={saving}
               />
             </>

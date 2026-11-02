@@ -6,6 +6,19 @@ import { CLASE_AUMENTA, CLASE_DISMINUYE } from './ajusteResumen';
 
 const { Text } = Typography;
 
+const compararTexto = (a: string | null | undefined, b: string | null | undefined) =>
+  (a || '').localeCompare(b || '', 'es', { sensitivity: 'base' });
+
+const compararNumero = (a: number | null | undefined, b: number | null | undefined) =>
+  (a ?? 0) - (b ?? 0);
+
+/** Valor de la linea resultante despues de aplicar el ajuste. */
+const cantidadFinal = (registro: AjusteConteoDTO) => registro.cantidadContada ?? 0;
+
+/** Valor (cantidad final x costo unitario) de la linea. */
+const costoFinal = (registro: AjusteConteoDTO) =>
+  cantidadFinal(registro) * (registro.costoUnitario ?? 0);
+
 /**
  * Columnas de la vista de ajuste de conteo.
  *
@@ -19,6 +32,7 @@ export const columnasAjuste: ColumnsType<AjusteConteoDTO> = [
     key: 'codigo',
     width: 130,
     fixed: 'left',
+    sorter: (a, b) => (a.codigo || '').localeCompare(b.codigo || '', 'es', { numeric: true }),
     render: (valor: string) => <Text strong>{valor}</Text>,
   },
   {
@@ -27,6 +41,7 @@ export const columnasAjuste: ColumnsType<AjusteConteoDTO> = [
     key: 'articulo',
     width: 240,
     ellipsis: true,
+    sorter: (a, b) => compararTexto(a.articulo, b.articulo),
     render: (valor: string) => <Text>{toTitleCase(valor || '') || '-'}</Text>,
   },
   {
@@ -35,6 +50,7 @@ export const columnasAjuste: ColumnsType<AjusteConteoDTO> = [
     key: 'familia',
     width: 150,
     ellipsis: true,
+    sorter: (a, b) => compararTexto(a.familia, b.familia),
     render: (valor: string) => (
       <Text type="secondary">{toTitleCase(valor || '') || '-'}</Text>
     ),
@@ -45,6 +61,7 @@ export const columnasAjuste: ColumnsType<AjusteConteoDTO> = [
     key: 'cantidadContada',
     width: 110,
     align: 'right',
+    sorter: (a, b) => compararNumero(a.cantidadContada, b.cantidadContada),
     render: (valor: number) => <Text>{formatNumber(valor ?? 0)}</Text>,
   },
   {
@@ -53,6 +70,7 @@ export const columnasAjuste: ColumnsType<AjusteConteoDTO> = [
     key: 'cantidadSistema',
     width: 110,
     align: 'right',
+    sorter: (a, b) => compararNumero(a.cantidadSistema, b.cantidadSistema),
     render: (valor: number) => <Text>{formatNumber(valor ?? 0)}</Text>,
   },
   {
@@ -61,6 +79,7 @@ export const columnasAjuste: ColumnsType<AjusteConteoDTO> = [
     key: 'cantidadAjuste',
     width: 120,
     align: 'right',
+    sorter: (a, b) => compararNumero(a.cantidadAjuste, b.cantidadAjuste),
     render: (valor: number) => {
       if (!valor) return <Text type="secondary">0</Text>;
       return (
@@ -72,11 +91,21 @@ export const columnasAjuste: ColumnsType<AjusteConteoDTO> = [
     },
   },
   {
+    title: 'Cantidad final',
+    dataIndex: 'cantidadFinal',
+    key: 'cantidadFinal',
+    width: 130,
+    align: 'right',
+    sorter: (a, b) => compararNumero(cantidadFinal(a), cantidadFinal(b)),
+    render: (_: unknown, registro) => <Text strong>{formatNumber(cantidadFinal(registro))}</Text>,
+  },
+  {
     title: 'Costo unit.',
     dataIndex: 'costoUnitario',
     key: 'costoUnitario',
     width: 130,
     align: 'right',
+    sorter: (a, b) => compararNumero(a.costoUnitario, b.costoUnitario),
     render: (valor: number, registro) => (
       <Tooltip title={`Origen del costo: ${registro.referencia}`}>
         <Text>{formatCurrency(valor ?? 0)}</Text>
@@ -89,6 +118,7 @@ export const columnasAjuste: ColumnsType<AjusteConteoDTO> = [
     key: 'totalAjuste',
     width: 140,
     align: 'right',
+    sorter: (a, b) => compararNumero(a.totalAjuste, b.totalAjuste),
     render: (valor: number) => {
       if (!valor) return <Text type="secondary">{formatCurrency(0)}</Text>;
       return (
@@ -99,14 +129,12 @@ export const columnasAjuste: ColumnsType<AjusteConteoDTO> = [
     },
   },
   {
-    title: 'Conteos origen',
-    dataIndex: 'conteosOrigen',
-    key: 'conteosOrigen',
-    width: 220,
-    render: (valor: string[]) => (
-      <Text type="secondary" style={{ fontSize: 12 }}>
-        {(valor || []).join(', ') || '-'}
-      </Text>
-    ),
+    title: 'Costo final',
+    dataIndex: 'costoFinal',
+    key: 'costoFinal',
+    width: 150,
+    align: 'right',
+    sorter: (a, b) => compararNumero(costoFinal(a), costoFinal(b)),
+    render: (_: unknown, registro) => <Text strong>{formatCurrency(costoFinal(registro))}</Text>,
   },
 ];

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Tag, Spin, Button, Grid, Divider, Dropdown,
+  Card, Table, Tabs, Tag, Spin, Button, Grid, Divider,
   Descriptions, Alert, Typography, Space, Input, DatePicker, Tooltip, message, Modal,
   Checkbox
 } from 'antd';
@@ -24,7 +24,6 @@ import DetalleToolbar from '../../components/DetalleToolbar';
 import AsientosContableTable from '../../components/AsientosContableTable';
 import LogTable from '../../components/LogTable';
 import FiltroSeleccionDropdown from '../../components/FiltroSeleccionDropdown';
-import PermissionGate from '../../components/PermissionGate';
 import { CODIGO_PLANTILLA_TURNO_CIERRE } from '../../utils/ticketPlantilla';
 import { companiaApi } from '../../api/companiaApi';
 import { reportesConfigApi } from '../../api/reportesConfigApi';
@@ -1802,22 +1801,29 @@ const tabsItems = [
         saving={posteando}
         onVolver={() => navigate(-1)}
         onPostear={handlePostear}
-        extraButtons={
-          <Space>
-            <Button icon={<ReloadOutlined />} onClick={handleRefresh} disabled={procesandoTurno} />
-            <PermissionGate codigoPantalla="FTURNOS" accion="IMPRIMIR">
-              <Dropdown.Button
-                icon={<PrinterOutlined />}
-                loading={imprimiendo}
-                disabled={procesandoTurno}
-                onClick={() => handleImprimir('ticket')}
-                menu={{ items: itemsImpresion, onClick: (e) => handleImprimir(e.key as OpcionImpresion) }}
-              >
-                Ticket Cierre
-              </Dropdown.Button>
-            </PermissionGate>
-          </Space>
-        }
+        extraAcciones={[
+          {
+            key: 'recargar',
+            label: 'Recargar',
+            icon: <ReloadOutlined />,
+            soloIcono: true,
+            tooltip: 'Recargar',
+            disabled: procesandoTurno,
+            onClick: handleRefresh,
+            prioridad: 40,
+          },
+          {
+            key: 'ticket-cierre',
+            label: 'Ticket Cierre',
+            icon: <PrinterOutlined />,
+            loading: imprimiendo,
+            disabled: procesandoTurno,
+            onClick: () => handleImprimir('ticket'),
+            menu: { items: itemsImpresion, onClick: (e) => handleImprimir(e.key as OpcionImpresion) },
+            permiso: { codigoPantalla: 'FTURNOS', accion: 'IMPRIMIR' },
+            prioridad: 80,
+          },
+        ]}
       />
 
       <div>

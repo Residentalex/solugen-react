@@ -7,6 +7,7 @@ interface EstadoColumnCellProps {
   estado: string | number;
   periodo?: number | string;
   revisado?: boolean;
+  autorizado?: boolean;
 }
 
 const LOCK_COLOR: Record<string, string> = {
@@ -18,7 +19,7 @@ const LOCK_COLOR: Record<string, string> = {
   cyan: '#006666',
 };
 
-const EstadoColumnCell: React.FC<EstadoColumnCellProps> = ({ estado, periodo, revisado }) => {
+const EstadoColumnCell: React.FC<EstadoColumnCellProps> = ({ estado, periodo, revisado, autorizado }) => {
   const esCerrado = typeof periodo === 'string' ? periodo === 'Cerrado' : Number(periodo) === 6;
   const info = resolveEstado(estado);
   const lockColor = LOCK_COLOR[info.color] || '#404040';
@@ -27,6 +28,11 @@ const EstadoColumnCell: React.FC<EstadoColumnCellProps> = ({ estado, periodo, re
       {info.label}
       {revisado && (
         <Tooltip title="Documento revisado">
+          <CheckCircleFilled style={{ marginLeft: 4, fontSize: 12, color: '#52c41a' }} />
+        </Tooltip>
+      )}
+      {autorizado && (
+        <Tooltip title="Documento autorizado">
           <CheckCircleFilled style={{ marginLeft: 4, fontSize: 12, color: '#52c41a' }} />
         </Tooltip>
       )}

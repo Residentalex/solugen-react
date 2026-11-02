@@ -314,7 +314,7 @@ const SolicitudPagoFormulario = () => {
         if (!id)
             return;
         const monto = nuevoMonto ?? 0;
-        setTransaccionesAsociadas((prev) => prev.map((t) => (t.transaccionAsociadaID || t.id) === id ? { ...t, monto: Math.min(monto, Math.max(0, pendienteEfectivo(t) - (t.descuento || 0))) } : t));
+        setTransaccionesAsociadas((prev) => prev.map((t) => (t.transaccionAsociadaID || t.id) === id ? { ...t, monto } : t));
     };
     const handleDescuentoChange = (id, nuevoDescuento) => {
         if (!id)
@@ -673,7 +673,7 @@ const SolicitudPagoFormulario = () => {
             key: 'monto',
             width: 140,
             align: 'right',
-            render: (_, record) => (_jsx(InputNumber, { size: "small", style: { width: '100%' }, className: "input-number-right", min: 0, max: Math.max(0, pendienteEfectivo(record) - (record.descuento || 0)), step: 0.01, precision: 2, value: record.monto, onChange: (val) => handleMontoChange(record.transaccionAsociadaID || record.id, val) })),
+            render: (_, record) => (_jsx(InputNumber, { size: "small", style: { width: '100%' }, className: "input-number-right", min: 0, step: 0.01, precision: 2, value: record.monto, onChange: (val) => handleMontoChange(record.transaccionAsociadaID || record.id, val) })),
         },
         {
             title: '', key: 'accion', width: 50,

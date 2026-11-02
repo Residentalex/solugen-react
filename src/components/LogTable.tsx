@@ -13,14 +13,16 @@ export const ACCION_MAP: Record<number, string> = {
   5: 'Postear',
   6: 'Anular',
   7: 'Revisar',
-  8: 'Reversar',
-  9: 'Escanear',
+  8: 'Autorizar',
+  9: 'Reversar',
+  10: 'Escanear',
+  11: 'Imprimir',
 };
 
 export const ACCION_TAG_COLOR_MAP: Record<number, string> = {
   0: 'success', 1: 'processing', 2: 'error', 3: 'success',
   4: 'warning', 5: 'processing', 6: 'error', 7: 'cyan',
-  8: 'orange', 9: 'default',
+  8: 'geekblue', 9: 'orange', 10: 'default', 11: 'purple',
 };
 
 interface LogEntry {

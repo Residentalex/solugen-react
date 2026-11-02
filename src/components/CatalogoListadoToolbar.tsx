@@ -1,9 +1,10 @@
 import React, { useRef, useState } from 'react';
-import { Input, Button, Tooltip } from 'antd';
+import { Input } from 'antd';
 import type { InputRef } from 'antd';
 import { SearchOutlined, ReloadOutlined, PlusOutlined, FileExcelOutlined, CopyOutlined } from '@ant-design/icons';
 import PageSizeSelect from './PageSizeSelect';
-import PermissionGate from './PermissionGate';
+import ToolbarAcciones from './ToolbarAcciones';
+import type { ToolbarAccion } from './ToolbarAcciones';
 
 const { Search } = Input;
 
@@ -17,6 +18,7 @@ interface CatalogoListadoToolbarProps {
   filtros?: React.ReactNode;
   onNuevo?: () => void;
   acciones?: React.ReactNode;
+  accionesItems?: ToolbarAccion[];
   showClonar?: boolean;
   clonarDisabled?: boolean;
   onClonar?: () => void;
@@ -36,6 +38,7 @@ const CatalogoListadoToolbar: React.FC<CatalogoListadoToolbarProps> = ({
   filtros,
   onNuevo,
   acciones,
+  accionesItems,
   showClonar,
   clonarDisabled,
   onClonar,
@@ -58,6 +61,59 @@ const CatalogoListadoToolbar: React.FC<CatalogoListadoToolbarProps> = ({
     setTimeout(() => searchRef.current?.focus?.(), 0);
   };
 
+  const accionesToolbar: ToolbarAccion[] = [
+    ...(onNuevo
+      ? [{
+          key: 'nuevo',
+          label: 'Nuevo',
+          icon: <PlusOutlined />,
+          tipo: 'primary' as const,
+          onClick: onNuevo,
+          permiso: { accion: 'CREAR' },
+          prioridad: 100,
+          disabled: deshabilitado,
+        }]
+      : []),
+    {
+      key: 'recargar',
+      label: 'Actualizar',
+      icon: <ReloadOutlined />,
+      soloIcono: true,
+      tooltip: 'Actualizar',
+      onClick: onReload,
+      prioridad: 90,
+      disabled: deshabilitado,
+    },
+    ...(showClonar && onClonar
+      ? [{
+          key: 'clonar',
+          label: 'Clonar',
+          icon: <CopyOutlined />,
+          soloIcono: true,
+          tooltip: 'Clonar',
+          onClick: onClonar,
+          permiso: { accion: 'CLONAR' },
+          prioridad: 80,
+          disabled: clonarDisabled || deshabilitado,
+        }]
+      : []),
+    ...(onExportarExcel
+      ? [{
+          key: 'exportar',
+          label: 'Exportar a Excel',
+          icon: <FileExcelOutlined />,
+          soloIcono: true,
+          tooltip: 'Exportar a Excel',
+          loading: exportando,
+          onClick: onExportarExcel,
+          permiso: { accion: 'EXPORTAR' },
+          prioridad: 70,
+          disabled: deshabilitado,
+        }]
+      : []),
+    ...(accionesItems ?? []).map((a) => ({ ...a, prioridad: a.prioridad ?? 50 })),
+  ];
+
   return (
     <div style={{ padding: '16px 24px 0' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
@@ -75,37 +131,8 @@ const CatalogoListadoToolbar: React.FC<CatalogoListadoToolbarProps> = ({
         {filtros}
         {!ocultarPageSize && <PageSizeSelect value={pageSize} onChange={onPageSizeChange} />}
         <div style={{ flex: 1 }} />
-        {onNuevo && (
-          <PermissionGate accion="CREAR">
-            <Button type="primary" icon={<PlusOutlined />} onClick={onNuevo} disabled={deshabilitado}>
-              Nuevo
-            </Button>
-          </PermissionGate>
-        )}
         {acciones}
-        {showClonar && onClonar && (
-          <PermissionGate accion="CLONAR">
-            <Tooltip title="Clonar">
-              <Button icon={<CopyOutlined />} aria-label="Clonar" disabled={clonarDisabled || deshabilitado} onClick={onClonar} />
-            </Tooltip>
-          </PermissionGate>
-        )}
-        {onExportarExcel && (
-          <PermissionGate accion="EXPORTAR">
-            <Tooltip title="Exportar a Excel">
-              <Button
-                icon={<FileExcelOutlined />}
-                aria-label="Exportar a Excel"
-                onClick={onExportarExcel}
-                disabled={deshabilitado}
-                loading={exportando}
-              />
-            </Tooltip>
-          </PermissionGate>
-        )}
-        <Tooltip title="Actualizar">
-          <Button icon={<ReloadOutlined />} aria-label="Actualizar" onClick={onReload} disabled={deshabilitado} />
-        </Tooltip>
+        <ToolbarAcciones acciones={accionesToolbar} />
       </div>
     </div>
   );

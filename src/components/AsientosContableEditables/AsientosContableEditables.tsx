@@ -11,6 +11,7 @@ interface AsientosContableEditablesProps {
   scroll?: { x?: number };
   rowKey?: string | ((record: any) => string);
   onGenerar?: () => void;
+  onLimpiar?: () => void;
   generando?: boolean;
   disableGenerar?: boolean;
 }
@@ -22,6 +23,7 @@ const AsientosContableEditables: React.FC<AsientosContableEditablesProps> = ({
   scroll,
   rowKey,
   onGenerar,
+  onLimpiar,
   generando = false,
   disableGenerar = false,
 }) => {
@@ -195,16 +197,27 @@ const AsientosContableEditables: React.FC<AsientosContableEditablesProps> = ({
 
   return (
     <div>
-      {onGenerar && (
-        <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'flex-end' }}>
-          <Button
-            icon={<ThunderboltOutlined />}
-            onClick={onGenerar}
-            loading={generando}
-            disabled={disableGenerar}
-          >
-            Generar asientos
-          </Button>
+      {(onGenerar || (editable && (asientos || []).length > 0)) && (
+        <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          {editable && (asientos || []).length > 0 && (
+            <Button
+              type="link"
+              danger
+              onClick={() => (onLimpiar ? onLimpiar() : onChange([]))}
+            >
+              Limpiar todos
+            </Button>
+          )}
+          {onGenerar && (
+            <Button
+              icon={<ThunderboltOutlined />}
+              onClick={onGenerar}
+              loading={generando}
+              disabled={disableGenerar}
+            >
+              Generar asientos
+            </Button>
+          )}
         </div>
       )}
       <Table

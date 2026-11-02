@@ -407,9 +407,7 @@ nota: res.nota || '',
     if (!id) return;
     const monto = nuevoMonto ?? 0;
     setTransaccionesAsociadas((prev) =>
-      prev.map((t) =>
-        (t.transaccionAsociadaID || t.id) === id ? { ...t, monto: Math.min(monto, Math.max(0, pendienteEfectivo(t) - (t.descuento || 0))) } : t
-      )
+      prev.map((t) => (t.transaccionAsociadaID || t.id) === id ? { ...t, monto } : t)
     );
   };
 
@@ -1096,7 +1094,6 @@ subTotal: res.subTotal ?? 0,
           style={{ width: '100%' }}
           className="input-number-right"
           min={0}
-          max={Math.max(0, pendienteEfectivo(record) - (record.descuento || 0))}
           step={0.01}
           precision={2}
           value={record.monto}
@@ -1254,6 +1251,7 @@ subTotal: res.subTotal ?? 0,
         excluirSpaId={id}
         sucursalForBloqueo={sucursalActiva}
         codigoMonedaPrincipal={monedaCodigo}
+        limitarPorMontoADistribuir={false}
       />
 
       {/* Modal de búsqueda de cuenta contable para asientos manuales */}

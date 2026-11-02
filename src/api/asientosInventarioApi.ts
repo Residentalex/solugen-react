@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 import type { ApiResponse, Sucursal } from '../types/auth';
-import type { ReporteAsientosInventarioDatosResponse } from '../types/contabilidad';
+import type { ReporteAsientosInventarioDatosResponse, ReporteAsientosInventarioItem } from '../types/contabilidad';
 
 /**
  * Filtros del reporte de asientos de inventario.
@@ -52,5 +52,31 @@ export const asientosInventarioApi = {
       `/reportes/asientos-inventario/${sucursal}/datos?${params.toString()}`,
     );
     return data.data ?? { items: [] };
+  },
+
+  /**
+   * Genera el PDF del reporte de asientos de inventario a partir de los items ya cargados en pantalla.
+   * Devuelve un Blob `application/pdf` para abrir en pestaña nueva.
+   */
+  imprimir: async (
+    sucursal: number,
+    filtros: AsientosInventarioFiltros,
+    items: ReporteAsientosInventarioItem[],
+  ): Promise<Blob> => {
+    const { data } = await apiClient.post<Blob>(
+      `/reportes/asientos-inventario/${sucursal}/imprimir`,
+      {
+        items,
+        fechaInicial: filtros.fechaInicial,
+        fechaFinal: filtros.fechaFinal,
+        noCuenta: filtros.noCuenta ?? '',
+        tipoDocumento: filtros.tipoDocumento ?? '',
+        alterno: filtros.alterno ?? false,
+        balanceAnterior: filtros.balance ?? false,
+        sucursalContable: filtros.sucursalContable !== undefined ? String(filtros.sucursalContable) : '',
+      },
+      { responseType: 'blob' },
+    );
+    return data;
   },
 };

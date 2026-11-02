@@ -2413,3 +2413,183 @@ a:focus-visible,
   outline: 2px solid var(--paces-primary);
   outline-offset: 2px;
 }
+
+/* Tablas en árbol: guías verticales, conector y caret */
+.paces-tree-table .ant-table-tbody > tr > td:first-child { padding-left: 12px; }
+.paces-tree-cell { display: inline-flex; align-items: center; position: relative; }
+.paces-tree-gap { display: inline-block; width: 20px; flex: 0 0 20px; }
+.paces-tree-toggle { position: relative; display: inline-flex; align-items: center; justify-content: flex-end; width: 20px; flex: 0 0 20px; padding-right: 2px; }
+.paces-tree-toggle--hijo::before { content: ''; position: absolute; left: -10px; right: 6px; top: 50%; border-top: 1px solid var(--paces-border, #dfe3ec); }
+.paces-tree-caret { font-size: 13px; color: #8c8c8c; cursor: pointer; transition: color .15s; }
+.paces-tree-icono { display: inline-flex; align-items: center; margin: 0 12px 0 3px; color: #8c8c8c; transition: color .15s; }
+.paces-tree-texto { display: inline-flex; align-items: center; gap: 8px; }
+.paces-tree-cell--abierto .paces-tree-caret,
+.paces-tree-cell--abierto .paces-tree-icono { color: var(--paces-primary, #1677ff); }
+.paces-tree-table .ant-table-tbody > tr.ant-table-row-level-1 > td:first-child,
+.paces-tree-table .ant-table-tbody > tr.ant-table-row-level-2 > td:first-child,
+.paces-tree-table .ant-table-tbody > tr.ant-table-row-level-3 > td:first-child,
+.paces-tree-table .ant-table-tbody > tr.ant-table-row-level-4 > td:first-child { position: relative; }
+.paces-tree-table .ant-table-tbody > tr.ant-table-row-level-1 > td:first-child::before,
+.paces-tree-table .ant-table-tbody > tr.ant-table-row-level-2 > td:first-child::before,
+.paces-tree-table .ant-table-tbody > tr.ant-table-row-level-3 > td:first-child::before,
+.paces-tree-table .ant-table-tbody > tr.ant-table-row-level-4 > td:first-child::before {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 22px; width: 1px;
+  background: var(--paces-border, #dfe3ec);
+}
+.paces-tree-table .ant-table-tbody > tr.ant-table-row-level-2 > td:first-child::before { box-shadow: 20px 0 0 0 var(--paces-border, #dfe3ec); }
+.paces-tree-table .ant-table-tbody > tr.ant-table-row-level-3 > td:first-child::before { box-shadow: 20px 0 0 0 var(--paces-border, #dfe3ec), 40px 0 0 0 var(--paces-border, #dfe3ec); }
+.paces-tree-table .ant-table-tbody > tr.ant-table-row-level-4 > td:first-child::before { box-shadow: 20px 0 0 0 var(--paces-border, #dfe3ec), 40px 0 0 0 var(--paces-border, #dfe3ec), 60px 0 0 0 var(--paces-border, #dfe3ec); }
+.paces-tree-table .ant-table-tbody > tr.paces-tree-fila-abierta > td:first-child::before { background: var(--paces-primary, #1677ff); opacity: .4; }
+
+.paces-tree-table .ant-table-tbody > tr.paces-tree-ultimo.ant-table-row-level-1 > td:first-child::before { display: none; }
+.paces-tree-table .ant-table-tbody > tr.paces-tree-ultimo.ant-table-row-level-2 > td:first-child::before { box-shadow: none; }
+.paces-tree-table .ant-table-tbody > tr.paces-tree-ultimo.ant-table-row-level-3 > td:first-child::before { box-shadow: 20px 0 0 0 var(--paces-border, #dfe3ec); }
+.paces-tree-table .ant-table-tbody > tr.paces-tree-ultimo.ant-table-row-level-4 > td:first-child::before { box-shadow: 20px 0 0 0 var(--paces-border, #dfe3ec), 40px 0 0 0 var(--paces-border, #dfe3ec); }
+.paces-tree-table .ant-table-tbody > tr.paces-tree-ultimo > td:first-child::after {
+  content: ''; position: absolute; top: 0; height: 50%; width: 1px; left: 22px;
+  background: var(--paces-border, #dfe3ec);
+}
+.paces-tree-table .ant-table-tbody > tr.paces-tree-ultimo.ant-table-row-level-2 > td:first-child::after { left: 42px; }
+.paces-tree-table .ant-table-tbody > tr.paces-tree-ultimo.ant-table-row-level-3 > td:first-child::after { left: 62px; }
+.paces-tree-table .ant-table-tbody > tr.paces-tree-ultimo.ant-table-row-level-4 > td:first-child::after { left: 82px; }
+.paces-tree-table .ant-table-tbody > tr.paces-tree-fila-abierta > td:first-child::after { background: var(--paces-primary, #1677ff); opacity: .4; }
+
+.paces-tree-table .ant-table-tbody > tr.paces-tree-fila-abierta > td.ant-table-cell { background-color: rgba(22, 119, 255, 0.06); }
+
+.paces-tree-table .ant-table-tbody > tr.paces-tree-rama-abierta > td.ant-table-cell { background-color: rgba(22, 119, 255, 0.035); }
+.paces-tree-table .ant-table-tbody > tr.paces-tree-rama-abierta > td:first-child::before,
+.paces-tree-table .ant-table-tbody > tr.paces-tree-rama-abierta > td:first-child::after { background: var(--paces-primary, #1677ff); opacity: .35; }
+
+/* ============================================================
+   Grid de formulario (imita Descriptions bordered size="small")
+   ============================================================ */
+.paces-form-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--paces-border);
+  border-left: 1px solid var(--paces-border);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--paces-bg-container);
+}
+
+.paces-form-grid--3col {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.paces-form-grid__celda {
+  border-right: 1px solid var(--paces-border);
+  border-bottom: 1px solid var(--paces-border);
+  padding: 8px 12px;
+  background: var(--paces-bg-container);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.paces-form-grid__label {
+  font-size: 12px;
+  color: var(--paces-text-secondary);
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.paces-form-grid__valor {
+  font-size: 13px;
+  color: var(--paces-text);
+  line-height: 1.5;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Modificadores de posición / span */
+.paces-form-grid__celda--col-3 { grid-column: 1 / span 3; grid-row: 1; }
+.paces-form-grid__celda--row-3 { grid-column: 4; grid-row: 1 / span 3; }
+.paces-form-grid__celda--row-2 { grid-row: span 2; }
+.paces-form-grid__celda--full { grid-column: 1 / -1; }
+
+/* Celda de relleno: cierra el borde en filas incompletas. Se oculta cuando el
+   grid colapsa a menos columnas para no generar filas vacías visibles. */
+.paces-form-grid__celda--relleno {
+  min-height: 1px;
+}
+
+/* Campo alto: el control ocupa el alto disponible de la celda */
+.paces-form-grid__celda--alto .paces-form-grid__valor {
+  display: flex;
+  flex-direction: column;
+}
+.paces-form-grid__celda--alto .paces-form-grid__valor .ant-input {
+  flex: 1;
+  height: 100%;
+  min-height: 96px;
+}
+
+/* Tableta (768–1199px): 2 columnas, sin spans explícitos. */
+@media (max-width: 1199px) and (min-width: 768px) {
+  .paces-form-grid,
+  .paces-form-grid--3col {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .paces-form-grid__celda--col-3,
+  .paces-form-grid__celda--row-2,
+  .paces-form-grid__celda--full {
+    grid-column: auto;
+    grid-row: auto;
+  }
+  /* Nombre / Razón Social ocupa todo el ancho en tableta. */
+  .paces-form-grid__celda--row-3 {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+  .paces-form-grid__celda--relleno {
+    display: none;
+  }
+}
+
+/* Móvil (<768px): 1 columna y sin spans */
+@media (max-width: 767px) {
+  .paces-form-grid,
+  .paces-form-grid--3col {
+    grid-template-columns: 1fr;
+  }
+  .paces-form-grid__celda,
+  .paces-form-grid__celda--col-3,
+  .paces-form-grid__celda--row-3,
+  .paces-form-grid__celda--row-2,
+  .paces-form-grid__celda--full {
+    grid-column: auto !important;
+    grid-row: auto !important;
+  }
+  .paces-form-grid__celda--relleno {
+    display: none;
+  }
+}
+
+/* ===== Nota HTML (solo lectura del editor de texto enriquecido) ===== */
+.paces-nota-html {
+  display: block;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.6;
+  min-height: 5.5em;
+  padding: 6px 8px;
+  border: 1px solid var(--paces-border);
+  border-radius: 4px;
+  background: var(--paces-bg-container);
+  color: var(--paces-text);
+  font-size: 13px;
+}
+.paces-nota-html p { margin: 0 0 8px; }
+.paces-nota-html p:last-child { margin-bottom: 0; }
+.paces-nota-html ul,
+.paces-nota-html ol { padding-left: 20px; margin: 0 0 8px; }
+.paces-nota-html a { color: var(--paces-primary); }
+
+/* En modo oscuro el bloque mantiene contraste con el fondo */
+.dark-mode .paces-nota-html {
+  background: var(--paces-bg-container);
+  border-color: var(--paces-border-secondary);
+}

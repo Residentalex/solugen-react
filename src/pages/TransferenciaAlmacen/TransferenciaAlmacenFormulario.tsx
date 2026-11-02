@@ -849,6 +849,16 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
         </div>
       ),
     },
+    {
+      title: 'Costo',
+      dataIndex: 'costo',
+      key: 'costo',
+      width: 130,
+      align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
+      render: (_: any, record: DetalleTRPInterno) => <div>{formatNumber(record.costo ?? record._costo ?? 0)}</div>,
+    },
     ...(sinOC ? [{
       title: 'Medida',
       key: 'medida',
@@ -1160,7 +1170,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
                             rowKey="id"
                             size="small"
                             pagination={false}
-                            scroll={{ x: 800 }}
+                            scroll={{ x: 930 }}
                             components={{ body: { row: SortableRow } }}
                             locale={{
                               emptyText: (
@@ -1256,17 +1266,17 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
                                columns={detalleColumns}
                                rowKey="id"
                                size="small"
-                               pagination={false}
-                                scroll={{ x: 800 }}
-                                components={{ body: { row: SortableRow } }}
-                               locale={{
-                                 emptyText: (
-                                   <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                     <Empty description="Sin registros" />
-                                   </div>
-                                 ),
-                               }}
-                             />
+                                pagination={false}
+                                 scroll={{ x: 930 }}
+                                 components={{ body: { row: SortableRow } }}
+                                locale={{
+                                  emptyText: (
+                                    <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                      <Empty description="Sin registros" />
+                                    </div>
+                                  ),
+                                }}
+                              />
                            </SortableContext>
                            <DragOverlay>
                             {activeId ? (

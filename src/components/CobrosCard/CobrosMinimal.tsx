@@ -1,17 +1,27 @@
 import React from 'react';
-import { Card, Skeleton, Empty, Divider } from 'antd';
+import { Card, Skeleton, Empty, Divider, Tag, Tooltip, Button } from 'antd';
 import {
   FileTextOutlined, SwapOutlined,
   CreditCardOutlined, GiftOutlined, TagOutlined,
   RollbackOutlined, CreditCardFilled, DollarCircleOutlined,
+  EditOutlined,
 } from '@ant-design/icons';
 import { formatCurrency, formatDate, toTitleCase } from '../../utils/formats';
 import type { CobroDTO } from '../../types/facturaPOS';
 
+interface NotaCreditoRef {
+  documento?: string;
+  transaccionAsociadaID?: number;
+}
+
 interface CobrosMinimalProps {
   cobrosPOS?: CobroDTO;
   cobrosArray?: any[];
+  /** Notas de credito relacionadas al documento, para mostrar su numero en el cobro. */
+  notasCredito?: NotaCreditoRef[];
   loading?: boolean;
+  /** Si viene, muestra un boton de edicion (lapiz) en el encabezado de la tarjeta. */
+  onEditar?: () => void;
 }
 
 const MEDIOS_POS: { key: keyof CobroDTO; label: string; icon: React.ReactNode }[] = [
@@ -40,7 +50,11 @@ function EstadoBadge({ estado }: { estado: number | undefined }) {
   );
 }
 
-const CobrosMinimal: React.FC<CobrosMinimalProps> = ({ cobrosPOS, cobrosArray, loading }) => {
+const CobrosMinimal: React.FC<CobrosMinimalProps> = ({ cobrosPOS, cobrosArray, notasCredito, loading, onEditar }) => {
+  const numerosNotaCredito = (notasCredito || [])
+    .map((n) => n.documento)
+    .filter((d): d is string => !!d);
+
   const renderContent = () => {
     if (loading) {
       return (
@@ -79,11 +93,24 @@ const CobrosMinimal: React.FC<CobrosMinimalProps> = ({ cobrosPOS, cobrosArray, l
                   background: 'var(--paces-bg-secondary)',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                   <span style={{ fontSize: 14, color: 'var(--paces-text-secondary)' }}>{m.icon}</span>
                   <span style={{ fontSize: 13, color: 'var(--paces-text-secondary)' }}>{m.label}</span>
+                  {m.key === 'notaCredito' && numerosNotaCredito.length > 0 && (
+                    <Tooltip title={numerosNotaCredito.join(', ')}>
+                      <Tag
+                        color="blue"
+                        style={{
+                          margin: 0, fontSize: 11, lineHeight: '18px',
+                          maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {numerosNotaCredito.join(', ')}
+                      </Tag>
+                    </Tooltip>
+                  )}
                 </div>
-                <span style={{ fontSize: 13, fontWeight: 500 }}>{formatCurrency(cobrosPOS[m.key] || 0)}</span>
+                <span style={{ fontSize: 13, fontWeight: 500, flexShrink: 0 }}>{formatCurrency(cobrosPOS[m.key] || 0)}</span>
               </div>
             ))}
           </div>
@@ -158,9 +185,20 @@ const CobrosMinimal: React.FC<CobrosMinimalProps> = ({ cobrosPOS, cobrosArray, l
       title={
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span><CreditCardOutlined style={{ color: '#556ee6', marginRight: 8 }} />Cobros</span>
-          {cobrosPOS && (
-            <EstadoBadge estado={(cobrosPOS as any).estado ?? ((cobrosPOS as any).pago != null && (cobrosPOS as any).pago > 0 ? 1 : undefined)} />
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {onEditar && (
+              <Button
+                type="text"
+                size="small"
+                icon={<EditOutlined />}
+                onClick={onEditar}
+                style={{ color: '#556ee6' }}
+              />
+            )}
+            {cobrosPOS && (
+              <EstadoBadge estado={(cobrosPOS as any).estado ?? ((cobrosPOS as any).pago != null && (cobrosPOS as any).pago > 0 ? 1 : undefined)} />
+            )}
+          </div>
         </div>
       }
       style={{ marginBottom: 16 }}

@@ -1,13 +1,13 @@
 ﻿import React, { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, Table, Card, Button, Modal, Descriptions, Typography, Tag, Divider, Empty } from 'antd';
+import { Alert, Table, Card, Button, Typography, Tag, Empty } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import FechaColumnCell from '../../components/FechaColumnCell';
 import { ofertaApi } from '../../api/ofertaApi';
-import type { OfertaDTO, DetalleOfertaDTO } from '../../types/oferta';
-import { formatCurrency } from '../../utils/formats';
+import type { OfertaDTO } from '../../types/oferta';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
@@ -18,19 +18,6 @@ const { Text } = Typography;
 function toTitleCase(str: string): string {
   if (!str) return str;
   return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function formatDate(dateStr: string): string {
-  if (!dateStr) return '-';
-  try {
-    return new Intl.DateTimeFormat('es-DO', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(new Date(dateStr));
-  } catch {
-    return dateStr;
-  }
 }
 
 function getVigencia(item: OfertaDTO): { text: string; color: string } {
@@ -44,16 +31,17 @@ function getVigencia(item: OfertaDTO): { text: string; color: string } {
 /* ───────── componente ───────── */
 
 const Ofertas: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
+  const prefijoRuta = location.pathname.startsWith('/saas') ? '/saas' : '';
 
   const [page, setPage] = useState(1);
   const [searchText, setSearchText] = useState('');
   const [pageSize, setPageSize] = useState(25);
-  const [detalleVisible, setDetalleVisible] = useState(false);
-  const [detalleItem, setDetalleItem] = useState<OfertaDTO | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['ofertas', sucursalActiva, page, pageSize, searchText],
@@ -108,8 +96,7 @@ const Ofertas: React.FC = () => {
   };
 
   const abrirDetalle = (item: OfertaDTO) => {
-    setDetalleItem(item);
-    setDetalleVisible(true);
+    navigate(`${prefijoRuta}/FOfertas/${encodeURIComponent(item.codigo)}`);
   };
 
   /* ───────── columnas ───────── */
@@ -231,82 +218,6 @@ const Ofertas: React.FC = () => {
           }}
         />
       </Card>
-
-      {/* ── Modal detalle ── */}
-      <Modal
-        title={`Oferta: ${detalleItem?.nombre || ''}`}
-        open={detalleVisible}
-        onCancel={() => setDetalleVisible(false)}
-        footer={null}
-        width={640}
-      >
-        {detalleItem && (
-          <>
-            <Descriptions column={1} bordered size="small" style={{ marginTop: 16 }}>
-              <Descriptions.Item label="Código">{detalleItem.codigo}</Descriptions.Item>
-              <Descriptions.Item label="Nombre">
-                {toTitleCase(detalleItem.nombre ?? '')}
-              </Descriptions.Item>
-              <Descriptions.Item label="Fecha Inicio">
-                {formatDate(detalleItem.fechaInicio)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Fecha Final">
-                {formatDate(detalleItem.fechaFinal)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Estado">
-                <Tag color={getVigencia(detalleItem).color}>
-                  {getVigencia(detalleItem).text}
-                </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="Aplica Crédito">
-                {detalleItem.aplicaClienteCredito ? 'Sí' : 'No'}
-              </Descriptions.Item>
-            </Descriptions>
-
-            {detalleItem.detalles && detalleItem.detalles.length > 0 && (
-              <>
-                <Divider>Productos ({detalleItem.detalles.length})</Divider>
-                <Table<DetalleOfertaDTO>
-                  dataSource={[...detalleItem.detalles].sort((a, b) => b.codigo.localeCompare(a.codigo))}
-                  rowKey="codigo"
-                  size="small"
-                  pagination={false}
-                  scroll={{ x: 500 }}
-                >
-                  <Table.Column
-                    title="Código"
-                    dataIndex="codigo"
-                    key="codigo"
-                    width={100}
-                  />
-                  <Table.Column
-                    title="Artículo"
-                    dataIndex="articulo"
-                    key="articulo"
-                    ellipsis
-                  />
-                  <Table.Column
-                    title="Precio"
-                    dataIndex="precio"
-                    key="precio"
-                    align="right"
-                    width={120}
-                    render={(v: number) => formatCurrency(v)}
-                  />
-                  <Table.Column
-                    title="Dto %"
-                    dataIndex="porcentajeDescuento"
-                    key="porcentajeDescuento"
-                    align="right"
-                    width={80}
-                    render={(v: number) => `${v}%`}
-                  />
-                </Table>
-              </>
-            )}
-          </>
-        )}
-      </Modal>
     </>
   );
 };

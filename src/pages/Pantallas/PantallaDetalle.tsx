@@ -9,7 +9,6 @@ import { pantallaApi } from '../../api/pantallaApi';
 import { permisoEspecialApi } from '../../api/permisoEspecialApi';
 import type { PantallaDTO, PantallaEntidadDTO, PermisoEspecialConAsignacionDTO } from '../../types/auth';
 import { ErrorDetalle } from '../../components';
-import PermissionGate from '../../components/PermissionGate';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { toTitleCase } from '../../utils/formats';
@@ -137,13 +136,15 @@ const PantallaDetalle: React.FC = () => {
         periodo={0}
         onVolver={() => navigate('/MPantalla')}
         onEditar={data ? () => navigate(`/MPantalla/${data.id}/editar`) : undefined}
-        extraButtons={
-          <PermissionGate accion="CREAR">
-            <Button icon={<PlusOutlined />} onClick={() => navigate('/MPantalla/nuevo')}>
-              Nuevo
-            </Button>
-          </PermissionGate>
-        }
+        extraAcciones={[
+          {
+            key: 'nuevo',
+            label: 'Nuevo',
+            icon: <PlusOutlined />,
+            onClick: () => navigate('/MPantalla/nuevo'),
+            permiso: { accion: 'CREAR' },
+          },
+        ]}
       />
 
       <Row gutter={16}>

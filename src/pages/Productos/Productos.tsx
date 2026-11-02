@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Table, Tag, Button, Card,  Typography, Tooltip, Alert, Empty, Space } from 'antd';
+import { Table, Tag, Button, Card,  Typography, Alert, Empty, Space } from 'antd';
 import { Select } from '../../components/Select';
 import { UploadOutlined, CopyOutlined } from '@ant-design/icons';
 import { useNavigate, Link } from 'react-router-dom';
@@ -9,7 +9,6 @@ import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useCompanyStore } from '../../stores/companyStore';
 import { productoApi } from '../../api/productoApi';
-import PermissionGate from '../../components/PermissionGate';
 import { toTitleCase, formatCurrency } from '../../utils/formats';
 import type { ProductoVistaDTO } from '../../types/productos';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
@@ -238,13 +237,17 @@ const Productos: React.FC = () => {
               }
             />
           }
-          acciones={
-            <PermissionGate permisoEspecial="pe_importar">
-              <Tooltip title="Importar desde Excel">
-                <Button icon={<UploadOutlined />} onClick={() => navigate("/MProducto/importar")} />
-              </Tooltip>
-            </PermissionGate>
-          }
+          accionesItems={[
+            {
+              key: 'importar',
+              label: 'Importar desde Excel',
+              icon: <UploadOutlined />,
+              soloIcono: true,
+              tooltip: 'Importar desde Excel',
+              onClick: () => navigate("/MProducto/importar"),
+              permiso: { permisoEspecial: 'pe_importar' },
+            },
+          ]}
         />
       <Table<ProductoVistaDTO>
         columns={columns}

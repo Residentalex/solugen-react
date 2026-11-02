@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 import type { FacturaVistaDTO, FiltroFacturacion } from '../types/facturacion';
-import type { FacturaPOSDTO, FacturaPOSResumenDTO, FacturaPOSFormularioDTO, DetalleFacturaPOSDTO, ReporteEscPosDTO } from '../types/facturaPOS';
+import type { FacturaPOSDTO, FacturaPOSResumenDTO, FacturaPOSFormularioDTO, DetalleFacturaPOSDTO, ReporteEscPosDTO, CobroDTO } from '../types/facturaPOS';
 import type { ImpuestoFacturaDTO } from '../types/impuestos';
 import type { AsientoContableDTO } from '../types/entradaAlmacen';
 import type { DocumentoRelacionadoDTO } from '../types/notaDebito';
@@ -141,6 +141,11 @@ export const facturaPOSApi = {
   obtenerVouchers: async (sucursal: number, id: number): Promise<VisanetVoucherDTO[]> => {
     const { data } = await apiClient.get<ApiResponse<VisanetVoucherDTO[]>>(`${BASE}/${sucursal}/${id}/vouchers`);
     return data.data || [];
+  },
+
+  actualizarCobros: async (sucursal: number, cobro: CobroDTO): Promise<CobroDTO> => {
+    const { data } = await apiClient.put<ApiResponse<CobroDTO>>(`${BASE}/cobro/${sucursal}`, cobro);
+    return data.data;
   },
 
   obtenerTotal: async (sucursal: number, desde?: string, hasta?: string): Promise<number> => {

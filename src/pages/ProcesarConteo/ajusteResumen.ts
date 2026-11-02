@@ -23,10 +23,18 @@ export interface ResumenAjuste {
   entradas: AjusteConteoDTO[];
   salidas: AjusteConteoDTO[];
   conDiferencia: AjusteConteoDTO[];
+  sinDiferencia: AjusteConteoDTO[];
   cantidadEntradas: number;
   cantidadSalidas: number;
   totalEntradas: number;
   totalSalidas: number;
+  /** Valor de la existencia actual de los articulos procesados (sistema x costo). */
+  valorActual: number;
+  /** Valor que quedaria en el almacen tras aplicar el ajuste (contado x costo). */
+  valorFinal: number;
+  valorFinalEntradas: number;
+  valorFinalSalidas: number;
+  valorFinalSinDiferencia: number;
 }
 
 export function calcularResumen(ajustes: AjusteConteoDTO[] | null): ResumenAjuste {
@@ -34,16 +42,26 @@ export function calcularResumen(ajustes: AjusteConteoDTO[] | null): ResumenAjust
   const entradas = lista.filter((a) => a.cantidadAjuste > 0);
   const salidas = lista.filter((a) => a.cantidadAjuste < 0);
   const conDiferencia = lista.filter((a) => a.cantidadAjuste !== 0);
+  const sinDiferencia = lista.filter((a) => a.cantidadAjuste === 0);
+
+  const valorFinal = (items: AjusteConteoDTO[]) =>
+    items.reduce((s, a) => s + a.cantidadContada * a.costoUnitario, 0);
 
   return {
     total: lista.length,
     entradas,
     salidas,
     conDiferencia,
+    sinDiferencia,
     cantidadEntradas: entradas.reduce((s, a) => s + a.cantidadAjuste, 0),
     cantidadSalidas: salidas.reduce((s, a) => s + a.cantidadAjuste, 0),
     totalEntradas: entradas.reduce((s, a) => s + a.totalAjuste, 0),
     totalSalidas: salidas.reduce((s, a) => s + a.totalAjuste, 0),
+    valorActual: lista.reduce((s, a) => s + (a.costoSistema ?? 0), 0),
+    valorFinal: valorFinal(lista),
+    valorFinalEntradas: valorFinal(entradas),
+    valorFinalSalidas: valorFinal(salidas),
+    valorFinalSinDiferencia: valorFinal(sinDiferencia),
   };
 }
 
@@ -66,11 +84,13 @@ export function filtrarAjustes(
 
 /** Opciones del selector de filtro, con los conteos ya resueltos. */
 export function opcionesFiltro(resumen: ResumenAjuste): { value: FiltroAjuste; label: string }[] {
+  const n = (valor: number) => valor.toLocaleString('es-DO', { maximumFractionDigits: 0 });
+
   return [
-    { value: 'conDiferencia', label: `Solo con diferencia (${resumen.conDiferencia.length})` },
-    { value: 'entradas', label: `Aumentan stock (${resumen.entradas.length})` },
-    { value: 'salidas', label: `Disminuyen stock (${resumen.salidas.length})` },
-    { value: 'todos', label: `Todos (${resumen.total})` },
+    { value: 'conDiferencia', label: `Solo con diferencia (${n(resumen.conDiferencia.length)})` },
+    { value: 'entradas', label: `Aumentan stock (${n(resumen.entradas.length)})` },
+    { value: 'salidas', label: `Disminuyen stock (${n(resumen.salidas.length)})` },
+    { value: 'todos', label: `Todos (${n(resumen.total)})` },
   ];
 }
 
@@ -91,17 +111,31 @@ export function filasParaExcel(
   ajustes: AjusteConteoDTO[],
   columnas: ColumnsType<AjusteConteoDTO>,
   formatearValor?: (clave: string, valor: unknown) => unknown
-): string[][] {
+): (string | number)[][] {
   const exportCols = columnas.filter((col) => col.title !== 'Acciones');
 
   return ajustes.map((item) =>
     exportCols.map((col) => {
       const clave = (col as { dataIndex?: string }).dataIndex;
       if (!clave) return '';
-      const valor = (item as unknown as Record<string, unknown>)[clave];
+
+      // Columnas calculadas de la grilla que no vienen del backend.
+      let valor: unknown;
+      if (clave === 'cantidadFinal') valor = item.cantidadContada ?? 0;
+      else if (clave === 'costoFinal') {
+        valor = (item.cantidadContada ?? 0) * (item.costoUnitario ?? 0);
+      } else if (clave === 'costoActual') {
+        valor = item.costoSistema ?? 0;
+      } else {
+        valor = (item as unknown as Record<string, unknown>)[clave];
+      }
+
       if (Array.isArray(valor)) return valor.join(', ');
       const final = formatearValor ? formatearValor(clave, valor) : valor;
-      return final != null ? String(final) : '';
+      if (final == null) return '';
+      // Los numeros viajan como numero para que Excel aplique el formato de
+      // decimales configurado en el exportador.
+      return typeof final === 'number' ? final : String(final);
     })
   );
 }

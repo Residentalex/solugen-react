@@ -1,72 +1,87 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Typography, Card, Table, Button, Empty, Spin, Alert } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { Typography, Card, Table, Empty, Spin } from 'antd';
 import { productoApi } from '../../api/productoApi';
 import { categoriaArticuloApi } from '../../api/categoriaArticuloApi';
 import { useUIStore } from '../../stores/uiStore';
-import { useAuthStore } from '../../stores/authStore';
+import { useCompanyStore } from '../../stores/companyStore';
+import DetalleCatalogoLayout from '../../components/DetalleCatalogoLayout';
 
-import type { ProductoListaDTO } from '../../types/productos';
+import type { ProductoVistaDTO } from '../../types/productos';
 
 const { Text } = Typography;
 
 const CategoriaArticuloDetalle: React.FC = () => {
   const { codigo } = useParams<{ codigo: string }>();
   const navigate = useNavigate();
-  const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
+  const sucursalProductos = useCompanyStore((s) => s.data.sucursalProductos);
+  const setActiveModule = useUIStore((s: any) => s.setActiveModule);
 
-  const [productos, setProductos] = useState<ProductoListaDTO[]>([]);
+  useEffect(() => {
+    setActiveModule('MCategoria');
+  }, [setActiveModule]);
+
+  const [productos, setProductos] = useState<ProductoVistaDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [categoriaInfo, setCategoriaInfo] = useState<{ nombre?: string } | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  useEffect(() => {
-    if (!codigo || sucursalActiva === undefined || sucursalActiva === 0) {
+  const cargar = useCallback(async () => {
+    if (!codigo || sucursalProductos === undefined) {
       setLoading(false);
       return;
     }
+
     setLoading(true);
     setError(false);
-    // Cargar info de la categoría
-    categoriaArticuloApi
-      .obtenerPorCodigo(sucursalActiva, codigo)
-      .then((cat) => {
-        setCategoriaInfo({ nombre: cat?.nombre || codigo });
-      })
-      .catch(() => setCategoriaInfo({ nombre: codigo }));
 
-    const timeoutId = setTimeout(() => setLoading(false), 8000);
-    productoApi
-      .obtenerListado(sucursalActiva, { cantidad: 500 })
-      .then((list) => {
-        const filtrados = (list || []).filter((p) =>
-          p.categoriaCodigo === codigo || p.familia?.nombre?.toLowerCase() === codigo?.toLowerCase() || p.familia?.nombre?.toLowerCase() === (categoriaInfo?.nombre || '').toLowerCase()
-        );
-        setProductos(filtrados);
-      })
-      .catch(() => setError(true))
-      .finally(() => { clearTimeout(timeoutId); setLoading(false); });
-  }, [codigo, sucursalActiva]);
+    try {
+      const categoria = await categoriaArticuloApi.obtenerPorCodigo(sucursalProductos, codigo);
+
+      if (!categoria) {
+        setCategoriaInfo(null);
+        setError(true);
+        return;
+      }
+
+      const nombreCategoria = categoria.nombre || codigo;
+      setCategoriaInfo({ nombre: nombreCategoria });
+
+      const { items } = await productoApi.obtenerVistaPorCategoria(sucursalProductos, codigo, {
+        cantidad: 500,
+        salto: 0,
+      });
+
+      setProductos(items);
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [codigo, sucursalProductos]);
+
+  useEffect(() => {
+    cargar();
+  }, [cargar, reloadKey]);
 
   return (
-    <div style={{ padding: 24 }}>
-      <Button
-        icon={<ArrowLeftOutlined />}
-        onClick={() => navigate('/MCategoria')}
-        style={{ marginBottom: 16 }}
+    <DetalleCatalogoLayout
+      rutaVolver="/MCategoria"
+      loading={loading}
+      mensajeLoading="Cargando categoría..."
+      loadingError={error}
+      mensajeError="Error al cargar la categoría"
+      onRecargar={() => setReloadKey((k) => k + 1)}
+      dataDisponible={!!categoriaInfo}
+      onEditar={codigo ? () => navigate(`/MCategoria/${codigo}/editar`) : undefined}
+    >
+      <Card
+        title={`Productos de la categoría: ${categoriaInfo?.nombre || codigo || '-'}`}
+        extra={<Text type="secondary">{productos.length} producto{productos.length !== 1 ? 's' : ''}</Text>}
       >
-        Volver al listado
-      </Button>
-      {(sucursalActiva === 0 || sucursalActiva === undefined) && (
-        <Alert message="No se detectó una sucursal activa válida (sucursal = 0). Verifique la autenticación o la configuración del backend." type="warning" showIcon style={{ marginBottom: 16 }} />
-      )}
-      <Card title={`Productos de la categoría: ${categoriaInfo?.nombre || codigo || '-'}`} extra={<Text type="secondary">{productos.length} producto{productos.length !== 1 ? 's' : ''}</Text>}>
-        {error && (
-          <Alert message="Error al cargar productos" type="error" showIcon style={{ marginBottom: 16 }} />
-        )}
         {loading && <Spin tip="Cargando productos..." />}
-        {!loading && !error && (
+        {!loading && (
           <Table
             columns={[
               { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
@@ -82,7 +97,7 @@ const CategoriaArticuloDetalle: React.FC = () => {
           />
         )}
       </Card>
-    </div>
+    </DetalleCatalogoLayout>
   );
 };
 

@@ -106,6 +106,7 @@ const Proveedores = React.lazy(() => import('./pages/Proveedores/Proveedores'));
 const ProveedorDetalle = React.lazy(() => import('./pages/Proveedores/ProveedorDetalle'));
 const Bancos = React.lazy(() => import('./pages/Bancos/Bancos'));
 const Ofertas = React.lazy(() => import('./pages/Ofertas/Ofertas'));
+const OfertaDetalle = React.lazy(() => import('./pages/Ofertas/OfertaDetalle'));
 const CuentasBancarias = React.lazy(() => import('./pages/CuentasBancarias/CuentasBancarias'));
 const FTransBanco = React.lazy(() => import('./pages/CuentasBancarias/CuentaBancariaDetalle'));
 const CuentaBancariaFormulario = React.lazy(() => import('./pages/CuentasBancarias/CuentaBancariaFormulario'));
@@ -114,6 +115,8 @@ const TransaccionBancariaFormulario = React.lazy(() => import('./pages/Transacci
 const UnidadesMedida = React.lazy(() => import('./pages/UnidadesMedida/UnidadesMedida'));
 const CategoriasArticulo = React.lazy(() => import('./pages/CategoriasArticulo/CategoriasArticulo'));
 const CategoriaArticuloDetalle = React.lazy(() => import('./pages/CategoriasArticulo/CategoriaArticuloDetalle'));
+const CategoriasArticuloImportar = React.lazy(() => import('./pages/CategoriasArticulo/CategoriasArticuloImportar'));
+const CategoriaArticuloFormulario = React.lazy(() => import('./pages/CategoriasArticulo/CategoriaArticuloFormulario'));
 const FamiliasArticulo = React.lazy(() => import('./pages/FamiliasArticulo/FamiliasArticulo'));
 const Marcas = React.lazy(() => import('./pages/Marca/Marcas'));
 const MarcaFormulario = React.lazy(() => import('./pages/Marca/MarcaFormulario'));
@@ -143,9 +146,11 @@ const Conteos = React.lazy(() => import('./pages/Conteos/Conteos'));
 const ConteoDetalle = React.lazy(() => import('./pages/Conteos/ConteoDetalle'));
 const ConteoFisicoFormulario = React.lazy(() => import('./pages/Conteos/ConteoFisicoFormulario'));
 const ProcesarConteo = React.lazy(() => import('./pages/ProcesarConteo/ProcesarConteo'));
-const ProcesableAjuste = React.lazy(() => import('./pages/ProcesarConteo/ProcesableAjuste'));
 const MovimientosProductos = React.lazy(() => import('./pages/MovimientosProductos/MovimientosProductos'));
 const ReporteExistencia = React.lazy(() => import('./pages/Inventario/ReporteExistencia'));
+const ReporteEntradas = React.lazy(() => import('./pages/Inventario/ReporteEntradas'));
+const ReporteSalidas = React.lazy(() => import('./pages/Inventario/ReporteSalidas'));
+const ReporteDevoluciones = React.lazy(() => import('./pages/Inventario/ReporteDevoluciones'));
 const ImportarInventario = React.lazy(() => import('./pages/ImportarInventario/ImportarInventario'));
 const ImportarDocBanco = React.lazy(() => import('./pages/ImportarDocBanco/ImportarDocBanco'));
 const ActualizacionCostos = React.lazy(() => import('./pages/ActualizacionCostos/ActualizacionCostos'));
@@ -200,6 +205,7 @@ const EcommerceAdminConfig = React.lazy(() => import('./pages/Ecommerce/Admin/Ec
 const ApiTokens = React.lazy(() => import('./pages/ApiTokens/ApiTokens'));
 const DocumentosAutorizados = React.lazy(() => import('./pages/DocumentosAutorizados/DocumentosAutorizados'));
 const Reporte606 = React.lazy(() => import('./pages/Reporte606/Reporte606'));
+const Reporte607 = React.lazy(() => import('./pages/Reporte607/Reporte607'));
 const DocumentosAplicados = React.lazy(() => import('./pages/DocumentosAplicados/DocumentosAplicados'));
 const DocumentosCxPAutorizados = React.lazy(() => import('./pages/DocumentosCxPAutorizados/DocumentosCxPAutorizados'));
 const DocumentosCxPAplicados = React.lazy(() => import('./pages/DocumentosCxPAplicados/DocumentosCxPAplicados'));
@@ -320,6 +326,7 @@ const App: React.FC = () => {
             <Route path="FDEV/:id" element={<DevolucionVentaDetalle />} />
             <Route path="RDEV" element={<ReporteDevolucionVenta />} />
             <Route path="R606" element={<Reporte606 />} />
+            <Route path="R607" element={<Reporte607 />} />
             <Route path="RGORC/:idExterno" element={<GeneradorOrdenCompraReporte />} />
             <Route path="RDocAutorizado" element={<DocumentosAutorizados />} />
             <Route path="RDocAplicado" element={<DocumentosAplicados />} />
@@ -445,6 +452,7 @@ const App: React.FC = () => {
             <Route path="MSUP/:codigo" element={<ProveedorDetalle />} />
             <Route path="MBanco" element={<Bancos />} />
             <Route path="FOfertas" element={<Ofertas />} />
+            <Route path="FOfertas/:codigo" element={<OfertaDetalle />} />
             <Route path="MCuentaBanco" element={<CuentasBancarias />} />
             <Route path="MCuentaBanco/nuevo" element={<CuentaBancariaFormulario mode="crear" />} />
             <Route path="MCuentaBanco/editar/:codigo" element={<CuentaBancariaFormulario mode="editar" />} />
@@ -454,6 +462,9 @@ const App: React.FC = () => {
             <Route path="FTransBanco/:id" element={<TransaccionBancariaDetalle />} />
             <Route path="MUnidadMedida" element={<UnidadesMedida />} />
             <Route path="MCategoria" element={<CategoriasArticulo />} />
+            <Route path="MCategoria/importar" element={<CategoriasArticuloImportar />} />
+            <Route path="MCategoria/nuevo" element={<CategoriaArticuloFormulario />} />
+            <Route path="MCategoria/:codigo/editar" element={<CategoriaArticuloFormulario />} />
             <Route path="MCategoria/:codigo" element={<CategoriaArticuloDetalle />} />
             <Route path="MFamilia" element={<FamiliasArticulo />} />
             <Route path="MMarca" element={<Marcas />} />
@@ -486,10 +497,12 @@ const App: React.FC = () => {
           <Route path="FConteos/editar/:documento" element={<ConteoFisicoFormulario />} />
             <Route path="CMovimientosProductos" element={<MovimientosProductos />} />
             <Route path="RExistencia" element={<ReporteExistencia />} />
+            <Route path="RENP" element={<ReporteEntradas />} />
+            <Route path="RSAP" element={<ReporteSalidas />} />
+            <Route path="RDVC" element={<ReporteDevoluciones />} />
             <Route path="CDocRevisados" element={<Proximamente modulo="Documentos Revisados" codigo="CDocRevisados" />} />
             <Route path="FPRODPEND" element={<Proximamente modulo="Productos Pendientes" codigo="FPRODPEND" />} />
             <Route path="OPROCESARCONTEO" element={<ProcesarConteo />} />
-            <Route path="OPROCESARCONTEO/ajuste" element={<ProcesableAjuste />} />
           <Route path="OReglasAbastecimiento" element={<Proximamente modulo="Reglas de Abastecimiento" codigo="OReglasAbastecimiento" />} />
           <Route path="FSPA" element={<SolicitudPago />} />
           <Route path="FSPA/nuevo" element={<SolicitudPagoFormulario />} />
@@ -599,6 +612,7 @@ const App: React.FC = () => {
             <Route path="FDEV/:id" element={<DevolucionVentaDetalle />} />
             <Route path="RDEV" element={<ReporteDevolucionVenta />} />
             <Route path="R606" element={<Reporte606 />} />
+            <Route path="R607" element={<Reporte607 />} />
             <Route path="RGORC/:idExterno" element={<GeneradorOrdenCompraReporte />} />
             <Route path="RDocAutorizado" element={<DocumentosAutorizados />} />
             <Route path="RDocAplicado" element={<DocumentosAplicados />} />
@@ -722,6 +736,7 @@ const App: React.FC = () => {
             <Route path="MSUP/:codigo" element={<ProveedorDetalle />} />
             <Route path="MBanco" element={<Bancos />} />
             <Route path="FOfertas" element={<Ofertas />} />
+            <Route path="FOfertas/:codigo" element={<OfertaDetalle />} />
             <Route path="MCuentaBanco" element={<CuentasBancarias />} />
             <Route path="MCuentaBanco/nuevo" element={<CuentaBancariaFormulario mode="crear" />} />
             <Route path="MCuentaBanco/editar/:codigo" element={<CuentaBancariaFormulario mode="editar" />} />
@@ -731,6 +746,9 @@ const App: React.FC = () => {
             <Route path="FTransBanco/:id" element={<TransaccionBancariaDetalle />} />
             <Route path="MUnidadMedida" element={<UnidadesMedida />} />
             <Route path="MCategoria" element={<CategoriasArticulo />} />
+            <Route path="MCategoria/importar" element={<CategoriasArticuloImportar />} />
+            <Route path="MCategoria/nuevo" element={<CategoriaArticuloFormulario />} />
+            <Route path="MCategoria/:codigo/editar" element={<CategoriaArticuloFormulario />} />
             <Route path="MCategoria/:codigo" element={<CategoriaArticuloDetalle />} />
             <Route path="MFamilia" element={<FamiliasArticulo />} />
             <Route path="MMarca" element={<Marcas />} />
@@ -762,10 +780,12 @@ const App: React.FC = () => {
           <Route path="FConteos/editar/:documento" element={<ConteoFisicoFormulario />} />
             <Route path="CMovimientosProductos" element={<MovimientosProductos />} />
             <Route path="RExistencia" element={<ReporteExistencia />} />
+            <Route path="RENP" element={<ReporteEntradas />} />
+            <Route path="RSAP" element={<ReporteSalidas />} />
+            <Route path="RDVC" element={<ReporteDevoluciones />} />
             <Route path="CDocRevisados" element={<Proximamente modulo="Documentos Revisados" codigo="CDocRevisados" />} />
             <Route path="FPRODPEND" element={<Proximamente modulo="Productos Pendientes" codigo="FPRODPEND" />} />
             <Route path="OPROCESARCONTEO" element={<ProcesarConteo />} />
-            <Route path="OPROCESARCONTEO/ajuste" element={<ProcesableAjuste />} />
           <Route path="OReglasAbastecimiento" element={<Proximamente modulo="Reglas de Abastecimiento" codigo="OReglasAbastecimiento" />} />
           <Route path="FSPA" element={<SolicitudPago />} />
           <Route path="FSPA/nuevo" element={<SolicitudPagoFormulario />} />
@@ -828,8 +848,8 @@ const App: React.FC = () => {
            <Route path="EBanners" element={<EcommerceAdminBanners />} />
            <Route path="EOrdenes" element={<EcommerceAdminOrdenes />} />
            <Route path="EConfig" element={<EcommerceAdminConfig />} />
-           <Route path="chat" element={<ChatPage />} />
-           </Route>
+            <Route path="chat" element={<ChatPage />} />
+            </Route>
 
         {/* Rutas de documentaciÃ³n (sin autenticaciÃ³n, fuera de MainLayout) */}
         <Route path="/documentacion" element={<DocumentacionPage />} />

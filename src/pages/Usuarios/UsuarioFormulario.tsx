@@ -171,6 +171,7 @@ const UsuarioFormulario: React.FC = () => {
         claveNoExpira: res.claveNoExpira,
         diasVigencia: res.diasVigencia,
         empleadoID: res.empleadoID,
+        refKey: res.refKey,
       });
       setSucursalesRolesEdit(JSON.parse(JSON.stringify(res.sucursalesRoles || [])));
       if (res.empleadoID) {
@@ -427,6 +428,13 @@ const UsuarioFormulario: React.FC = () => {
                       <Input />
                     </Form.Item>
                   </Col>
+                  {id && data?.refKey ? (
+                    <Col xs={12} sm={8} lg={4}>
+                      <Form.Item label="RefKey">
+                        <Input value={data.refKey} readOnly />
+                      </Form.Item>
+                    </Col>
+                  ) : null}
                   <Col xs={12} sm={8} lg={3}>
                     <Form.Item name="diasVigencia" label="Vigencia (días)" rules={[{ required: true, message: 'Obligatorio' }]}>
                       <InputNumber min={1} max={365} style={{ width: '100%' }} />

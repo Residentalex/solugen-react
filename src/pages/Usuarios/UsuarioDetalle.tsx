@@ -315,6 +315,11 @@ const UsuarioDetalle: React.FC = () => {
           <Descriptions.Item label="Clave no expira">
             <Tag color={data!.claveNoExpira ? 'green' : 'default'}>{data!.claveNoExpira ? 'Sí' : 'No'}</Tag>
           </Descriptions.Item>
+          {data!.refKey ? (
+            <Descriptions.Item label="RefKey">
+              <span style={{ fontFamily: 'monospace' }}>{data!.refKey}</span>
+            </Descriptions.Item>
+          ) : null}
           <Descriptions.Item label="Último inicio">{formatFecha(data!.ultimoLogin)}</Descriptions.Item>
         </Descriptions>
       </Card>

@@ -32,7 +32,6 @@ import { productoApi } from '../../api/productoApi';
 import SucursalField from '../../components/SucursalField';
 import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
-import PermissionGate from '../../components/PermissionGate';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import ErrorDetalle from '../../components/ErrorDetalle';
 import EntidadCard from '../../components/EntidadCard';
@@ -966,6 +965,15 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
         onRevisado={handleRevisado}
         onDesaplicar={tienePagos ? undefined : async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
+        extraAcciones={id && toEstadoNum(documentoActivo.estado) === 1 ? [
+          {
+            key: 'devolver',
+            label: 'Devolver',
+            icon: <RollbackOutlined />,
+            onClick: () => navigate('/FDVC/nuevo', { state: { entradaId: data?.id } }),
+            permiso: { codigoPantalla: 'FDVC', accion: 'CREAR' },
+          },
+        ] : undefined}
         extraButtons={id ? (
           <>
             {toEstadoNum(data?.estado) === 3 && reversoData && (
@@ -977,13 +985,6 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                 style={{ marginLeft: 8 }}
               />
             )}
-            {toEstadoNum(documentoActivo.estado) === 1 ? (
-              <PermissionGate codigoPantalla="FDVC" accion="CREAR">
-                <Button icon={<RollbackOutlined />} onClick={() => navigate('/FDVC/nuevo', { state: { entradaId: data?.id } })}>
-                  Devolver
-                </Button>
-              </PermissionGate>
-            ) : undefined}
           </>
         ) : undefined}
       />

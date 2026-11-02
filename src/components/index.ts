@@ -34,5 +34,6 @@ export { default as ModalMovimientosPosteriores } from './ModalMovimientosPoster
 export type { ModalMovimientosPosterioresProps } from './ModalMovimientosPosteriores/ModalMovimientosPosteriores';
 export { default as ModalSeleccionarImpresoraPOS } from './ModalSeleccionarImpresoraPOS/ModalSeleccionarImpresoraPOS';
 export type { ModalSeleccionarImpresoraPOSProps } from './ModalSeleccionarImpresoraPOS/ModalSeleccionarImpresoraPOS';
+export { default as RealizarPagoModal } from './RealizarPagoModal/RealizarPagoModal';
 export { default as ModalBuscarSuplidor } from './ModalBuscarSuplidor/ModalBuscarSuplidor';
 export type { ModalBuscarSuplidorProps } from './ModalBuscarSuplidor/ModalBuscarSuplidor';

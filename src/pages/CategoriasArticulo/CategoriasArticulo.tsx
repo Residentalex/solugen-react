@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Tree, Alert, Card, Button, Typography, Empty, Spin, Input, Tag } from 'antd';
-import { SearchOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
+import { Alert, Card, Button, Table, Typography, Empty, Spin, Tag } from 'antd';
+import { FolderOutlined, UploadOutlined } from '@ant-design/icons';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
-import { useAuthStore } from '../../stores/authStore';
+import CeldaArbol from '../../components/CeldaArbol';
+import { useCompanyStore } from '../../stores/companyStore';
 import { useUIStore } from '../../stores/uiStore';
 import { categoriaArticuloApi } from '../../api/categoriaArticuloApi';
 
@@ -20,43 +21,30 @@ const CategoriasArticulo: React.FC = () => {
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
-  const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
+  const sucursalProductos = useCompanyStore((s) => s.data.sucursalProductos);
 
   const [totalesPorCategoria, setTotalesPorCategoria] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    if (sucursalActiva === undefined || sucursalActiva === 0) return;
+    if (sucursalProductos === undefined) return;
     productoApi
-      .obtenerListado(sucursalActiva, { cantidad: 500 })
-      .then((list) => {
-        const mapa: Record<string, number> = {};
-        (list || []).forEach((p) => {
-          const clave = p.categoriaCodigo || p.familia?.nombre || '';
-          if (clave) {
-            mapa[clave] = (mapa[clave] || 0) + 1;
-          }
-        });
-        setTotalesPorCategoria(mapa);
-      })
+      .obtenerConteoPorCategoria(sucursalProductos)
+      .then((mapa) => setTotalesPorCategoria(mapa))
       .catch(() => setTotalesPorCategoria({}));
-  }, [sucursalActiva]);
+  }, [sucursalProductos]);
 
   const [searchText, setSearchText] = useState('');
   const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['categoriasArticulo', sucursalActiva, searchText],
+    queryKey: ['categoriasArticulo', sucursalProductos, searchText],
     queryFn: async () => {
-      if (sucursalActiva === undefined) return { datos: [], total: 0 };
+      if (sucursalProductos === undefined) return { datos: [], total: 0 };
       const params: { cantidad?: number; salto?: number; busqueda?: string } = { cantidad: 500, salto: 0 };
       if (searchText) params.busqueda = searchText;
-      const [resultados, totalCount] = await Promise.all([
-        categoriaArticuloApi.filtrar(sucursalActiva, params),
-        categoriaArticuloApi.obtenerTotal(sucursalActiva, { busqueda: searchText || undefined }),
-      ]);
-      return { datos: resultados || [], total: totalCount ?? 0 };
+      return await categoriaArticuloApi.filtrar(sucursalProductos, params);
     },
-    enabled: sucursalActiva !== undefined,
+    enabled: sucursalProductos !== undefined,
     placeholderData: (prev) => prev,
   });
 
@@ -68,62 +56,83 @@ const CategoriasArticulo: React.FC = () => {
 
   const datos = Array.isArray(data?.datos) ? data.datos : [];
 
-  const treeData = useMemo(() => {
-    const grupos = new Map<string, CategoriaArticuloDTO[]>();
-    const sinGrupo: CategoriaArticuloDTO[] = [];
-    datos.forEach((item) => {
-      const grupoNombre = item.grupo?.nombre ? toTitleCase(item.grupo.nombre) : 'Sin grupo';
-      if (grupoNombre === 'Sin grupo') {
-        sinGrupo.push(item);
-      } else {
-        if (!grupos.has(grupoNombre)) grupos.set(grupoNombre, []);
-        grupos.get(grupoNombre)!.push(item);
+  const arbol = useMemo(() => {
+    const mapa = new Map<string, any>();
+    const nodoPorNombre = new Map<string, any>();
+    datos.forEach((c) => {
+      const nodo = { ...c, children: [] as any[] };
+      mapa.set(String(c.codigo ?? c.idExterno), nodo);
+      const nombre = String(c.nombre ?? '').trim().toUpperCase();
+      if (nombre && !nodoPorNombre.has(nombre)) nodoPorNombre.set(nombre, nodo);
+    });
+    const raices: any[] = [];
+    datos.forEach((c) => {
+      const clave = String(c.codigo ?? c.idExterno);
+      const padreCodigo = c.control?.codigo ?? c.control?.idExterno;
+      let padre = padreCodigo ? mapa.get(String(padreCodigo)) : undefined;
+      if (!padre && c.control?.nombre) {
+        padre = nodoPorNombre.get(String(c.control.nombre).trim().toUpperCase());
       }
+      if (padre && padre !== mapa.get(clave)) padre.children.push(mapa.get(clave));
+      else raices.push(mapa.get(clave));
     });
-    const nodes: any[] = [];
-    grupos.forEach((items, grupoNombre) => {
-      nodes.push({
-        title: (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Text strong style={{ fontSize: 13 }}>{grupoNombre}</Text>
-            <Tag color="geekblue" style={{ fontSize: 11 }}>{items.reduce((acc, item) => acc + (totalesPorCategoria[item.codigo || ''] || totalesPorCategoria[item.grupo?.nombre || ''] || 0), 0)} art.</Tag>
-          </span>
-        ),
-        key: `grupo-${grupoNombre}`,
-        isLeaf: false,
-        children: items.map((item) => ({
-          title: (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontFamily: 'monospace' }} onClick={() => navigate(`/MCategoria/${item.codigo}`)}>
-              <strong>{item.codigo || '-'}</strong> — <span>{toTitleCase(item.nombre ?? '')}</span>
-              <Tag color="geekblue" style={{ fontSize: 11, marginLeft: 'auto' }}>{totalesPorCategoria[item.codigo || ''] || totalesPorCategoria[item.grupo?.nombre || ''] || 0} art.</Tag>
-            </span>
-          ),
-          key: item.codigo || item.nombre || `item-${Math.random()}`,
-          isLeaf: true,
-        })),
-      });
+    const ordenar = (arr: any[]) => {
+      arr.sort((a, b) => String(a.nombre ?? '').localeCompare(String(b.nombre ?? '')));
+      arr.forEach((n) => ordenar(n.children));
+    };
+    ordenar(raices);
+    const limpiar = (n: any) => { if (n.children.length === 0) delete n.children; else n.children.forEach(limpiar); };
+    raices.forEach(limpiar);
+    const marcar = (arr: any[], nivel: number, abierto: boolean) => arr.forEach((n, i) => {
+      n.__nivel = nivel; n.__ultimo = i === arr.length - 1; n.__rama = abierto;
+      if (n.children) marcar(n.children, nivel + 1, abierto || expandedKeys.includes(String(n.codigo ?? n.idExterno)));
     });
-    sinGrupo.forEach((item) => {
-      nodes.push({
-        title: (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontFamily: 'monospace' }} onClick={() => navigate(`/MCategoria/${item.codigo}`)}>
-            <strong>{item.codigo || '-'}</strong> — <span>{toTitleCase(item.nombre ?? '')}</span>
-            <Tag color="geekblue" style={{ fontSize: 11, marginLeft: 'auto' }}>{totalesPorCategoria[item.codigo || ''] || totalesPorCategoria[item.grupo?.nombre || ''] || 0} art.</Tag>
-          </span>
-        ),
-        key: item.codigo || item.nombre || `item-${Math.random()}`,
-        isLeaf: true,
-      });
-    });
-    return nodes.sort((a, b) => a.key.localeCompare(b.key));
-  }, [datos, navigate]);
+    marcar(raices, 0, false);
+    return raices;
+  }, [datos, expandedKeys]);
+
+  const claveCat = (r: any) => String(r?.codigo ?? r?.idExterno ?? '');
+
+  const columnas = useMemo(() => [
+    {
+      title: 'Categoría',
+      dataIndex: 'nombre',
+      render: (v: string, r: any) => (
+        <CeldaArbol
+          nivel={r.__nivel ?? 0}
+          tieneHijos={!!(r.children?.length)}
+          expandido={expandedKeys.includes(claveCat(r))}
+          onToggle={() => setExpandedKeys((prev) => prev.includes(claveCat(r)) ? prev.filter((k) => k !== claveCat(r)) : [...prev, claveCat(r)])}
+          icono={<FolderOutlined />}
+        >
+          <a className="paces-doc-link" onClick={() => navigate(`/MCategoria/${r.codigo}`)}>{toTitleCase(v ?? '')}</a>
+        </CeldaArbol>
+      ),
+    },
+    {
+      title: 'Familia',
+      key: 'familia',
+      width: 260,
+      render: (_: unknown, r: CategoriaArticuloDTO) => {
+        const familia = r.familia?.nombre ?? r.grupo?.nombre;
+        return familia ? toTitleCase(familia) : '—';
+      },
+    },
+    {
+      title: 'Artículos',
+      key: 'articulos',
+      width: 120,
+      align: 'right' as const,
+      render: (_: unknown, r: CategoriaArticuloDTO) => <Tag color="geekblue">{totalesPorCategoria[String(r.codigo ?? '')] || 0}</Tag>,
+    },
+  ], [navigate, totalesPorCategoria, expandedKeys]);
 
   const handleSearch = (value: string) => {
     setSearchText(value);
   };
 
   const handleExportarExcel = async () => {
-    const companyName = await getCompanyName(sucursalActiva);
+    const companyName = await getCompanyName(sucursalProductos);
     const dataSource = datos || [];
     const exportCols = [
       { title: 'Código', dataIndex: 'codigo' },
@@ -174,9 +183,21 @@ const CategoriasArticulo: React.FC = () => {
         onSearch={handleSearch}
         pageSize={25}
         onPageSizeChange={() => {}}
+        ocultarPageSize
         onNuevo={() => navigate('/MCategoria/nuevo')}
         onReload={() => refetch()}
         onExportarExcel={handleExportarExcel}
+        accionesItems={[
+          {
+            key: 'importar',
+            label: 'Importar desde Excel',
+            icon: <UploadOutlined />,
+            soloIcono: true,
+            tooltip: 'Importar desde Excel',
+            onClick: () => navigate('/MCategoria/importar'),
+            permiso: { permisoEspecial: 'pe_importar' },
+          },
+        ]}
       />
       <div style={{ padding: '8px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Text type="secondary" style={{ fontSize: 12 }}>
@@ -187,12 +208,20 @@ const CategoriasArticulo: React.FC = () => {
         {isLoading ? (
           <div style={{ textAlign: 'center', padding: 48 }}><Spin size="large" /></div>
         ) : (
-          <Tree
-            showLine={{ showLeafIcon: false }}
-            defaultExpandAll={false}
-            treeData={treeData}
-            blockNode
-            selectable={false}
+          <Table
+            rowKey={(r: any) => String(r.codigo ?? r.idExterno)}
+            columns={columnas as any}
+            dataSource={(searchText ? datos : arbol) as any[]}
+            pagination={false}
+            size="middle"
+            className="paces-border-top paces-list-table paces-tree-table"
+            rowClassName={(r: any) => { const abierto = expandedKeys.includes(claveCat(r)); return `paces-row-hover${abierto ? ' paces-tree-fila-abierta' : ''}${!abierto && r.__rama ? ' paces-tree-rama-abierta' : ''}${r.__ultimo && r.__nivel > 0 ? ' paces-tree-ultimo' : ''}`; }}
+            expandable={{
+              expandIcon: () => null,
+              expandedRowKeys: expandedKeys,
+              onExpandedRowsChange: (keys) => setExpandedKeys(keys as string[]),
+            }}
+            indentSize={0}
           />
         )}
         {!isLoading && datos.length === 0 && (

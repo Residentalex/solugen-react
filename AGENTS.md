@@ -240,6 +240,15 @@ Reglas:
 - No usar estilos inline repetidos que puedan reemplazarse con clases CSS existentes
 - Todo modal de busqueda o seleccion (BuscarConcepto, BuscarDocumento, BuscarEntidad, etc.) debe ser un componente compartido en `src/components/`, no definido dentro de la misma pagina donde se usa. Unica excepcion: modales especificos de una sola pantalla que no se reutilizan en otro modulo, o diferencias funcionales reales justificadas y comentadas.
 
+## Toolbar única
+
+- Una sola barra de herramientas por pantalla.
+- `Volver` va fijo a la izquierda y NO cuenta dentro del límite de acciones.
+- Máximo 2 acciones visibles usando `ToolbarAcciones`; el resto va dentro del botón de menú `⋯`.
+- Las acciones destructivas van SIEMPRE al menú `⋯`.
+- `DetalleToolbar.extraButtons` es solo para controles (Switch, Tag, Divider, Select); los botones de acción van en `extraAcciones`.
+- No renderizar dos toolbars en la misma pantalla (prohibido `FormularioToolbar` + `DetalleCatalogoLayout` en la misma pantalla).
+
 ## Filtros tipo Excel en columnas
 
 Existe un componente compartido `src/components/FiltroSeleccionDropdown.tsx` que implementa filtros estilo Excel en columnas de tablas:

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Tooltip, Modal, Alert, App, QRCode, Input, Typography, Switch, Dropdown
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Tooltip, Modal, Alert, App, QRCode, Input, Typography, Switch
 } from 'antd';
 import type { MenuProps } from 'antd';
 import {
@@ -679,12 +679,43 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
         onRevisado={handleRevisado}
         onDesaplicar={async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
+        extraAcciones={id ? [
+          {
+            key: 'imprimir',
+            label: 'Imprimir',
+            icon: <PrinterOutlined />,
+            soloIcono: true,
+            tooltip: 'Imprimir',
+            loading: imprimiendo,
+            permiso: { codigoPantalla: codigoPantalla, accion: 'IMPRIMIR' },
+            menu: { items: printMenuItems, onClick: handlePrintMenuClick },
+          },
+          ...(data?.ncf && !estadoDGII?.codigoQR ? [{
+            key: 'enviar-dgii',
+            label: 'Enviar DGII',
+            icon: <SendOutlined />,
+            loading: enviandoDGII,
+            disabled: toEstadoNum(data?.estado) !== 1,
+            permiso: { codigoPantalla: codigoPantalla, permisoEspecial: 'pe_marcar_enviado' },
+          }] : []),
+          ...(!data?.ncf || !estadoDGII?.codigoQR ? [{
+            key: 'reasignar-ncf',
+            label: 'Reasignar NCF',
+            icon: <FileTextOutlined />,
+            disabled: toEstadoNum(data?.estado) !== 1,
+            permiso: { codigoPantalla: codigoPantalla, permisoEspecial: 'pe_preasignar_ncf' },
+          }] : []),
+          {
+            key: 'recalcular',
+            label: 'Recalcular',
+            icon: <ReloadOutlined />,
+            loading: recalculando,
+            permiso: { permisoEspecial: 'pe_recalcular' },
+          },
+        ] : undefined}
         extraButtons={id ? (
           <>
             <PermissionGate codigoPantalla={codigoPantalla} accion="IMPRIMIR">
-              <Dropdown menu={{ items: printMenuItems, onClick: handlePrintMenuClick }} trigger={['click']}>
-                <Button icon={<PrinterOutlined />} loading={imprimiendo} />
-              </Dropdown>
               {qz.printerName && (
                 <Tag color="success" style={{ marginLeft: 2, fontSize: 11, lineHeight: '18px' }}>
                   QZ: {qz.printerName}
@@ -700,42 +731,10 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
                 style={{ marginLeft: 8 }}
               />
             )}
-            {!data?.ncf ? (
-              <PermissionGate codigoPantalla={codigoPantalla} permisoEspecial="pe_preasignar_ncf">
-                <Button icon={<FileTextOutlined />} size="small" onClick={handleReasignarNCF}
-                  disabled={toEstadoNum(data?.estado) !== 1}>
-                  Reasignar NCF
-                </Button>
-              </PermissionGate>
-            ) : !estadoDGII?.codigoQR ? (
-              <>
-                <PermissionGate codigoPantalla={codigoPantalla} permisoEspecial="pe_marcar_enviado">
-                  <Button icon={<SendOutlined />} size="small" onClick={handleEnviarDGII}
-                    loading={enviandoDGII}
-                    disabled={toEstadoNum(data?.estado) !== 1}>
-                    Enviar DGII
-                  </Button>
-                </PermissionGate>
-                <PermissionGate codigoPantalla={codigoPantalla} permisoEspecial="pe_preasignar_ncf">
-                  <Button icon={<FileTextOutlined />} size="small" onClick={handleReasignarNCF}
-                    disabled={toEstadoNum(data?.estado) !== 1}>
-                    Reasignar NCF
-                  </Button>
-                </PermissionGate>
-              </>
-            ) : (
+            {data?.ncf && estadoDGII?.codigoQR && (
               <Tag color="success" icon={<CheckCircleOutlined />}>DGII OK</Tag>
             )}
             <Divider type="vertical" />
-            <PermissionGate permisoEspecial="pe_recalcular">
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={handleRecalcular}
-                loading={recalculando}
-              >
-                Recalcular
-              </Button>
-            </PermissionGate>
           </>
         ) : undefined}
       />

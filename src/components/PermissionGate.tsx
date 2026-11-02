@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useUIStore } from '../stores/uiStore';
+import type { AuthUsuarioSesionDTO } from '../types/auth';
 
 interface PermissionGateProps {
   codigoPantalla?: string;
@@ -9,12 +10,28 @@ interface PermissionGateProps {
   children: React.ReactNode;
 }
 
-const PermissionGate: React.FC<PermissionGateProps> = ({ codigoPantalla, accion, permisoEspecial, children }) => {
-  const usuario = useAuthStore((s) => s.usuario);
-  const activeModule = useUIStore((s) => s.activeModule);
+export interface VerificarPermisoArgs {
+  usuario: AuthUsuarioSesionDTO | null;
+  activeModule: string;
+  codigoPantalla?: string;
+  accion?: string;
+  permisoEspecial?: string;
+}
 
+/**
+ * Funcion pura de verificacion de permisos. Devuelve `true` cuando la accion
+ * esta permitida para el usuario en la pantalla indicada (o en el modulo activo
+ * cuando no se pasa `codigoPantalla`).
+ */
+export function verificarPermiso({
+  usuario,
+  activeModule,
+  codigoPantalla,
+  accion,
+  permisoEspecial,
+}: VerificarPermisoArgs): boolean {
   if (!usuario) {
-    return null;
+    return false;
   }
 
   // Si se pasa permisoEspecial, verifica contra permisosEspeciales del usuario
@@ -22,7 +39,7 @@ const PermissionGate: React.FC<PermissionGateProps> = ({ codigoPantalla, accion,
     const permiso = usuario.permisosEspeciales?.find(
       (p) => p.codigo?.toUpperCase() === permisoEspecial.toUpperCase()
     );
-    if (!permiso) return null;
+    if (!permiso) return false;
 
     // Si el permiso tiene pantallaId > 0, verificar que coincida con la pantalla actual
     if (permiso.pantallaId !== undefined && permiso.pantallaId > 0) {
@@ -32,7 +49,7 @@ const PermissionGate: React.FC<PermissionGateProps> = ({ codigoPantalla, accion,
           (p) => p.codigo?.toUpperCase() === codigo?.toUpperCase()
         );
         if (!pantallaActual || pantallaActual.id !== permiso.pantallaId) {
-          return null;
+          return false;
         }
       }
     }
@@ -43,29 +60,34 @@ const PermissionGate: React.FC<PermissionGateProps> = ({ codigoPantalla, accion,
       ? (permiso.valorNumerico ?? 0) > 0
       : permiso.valor === true;
 
-    if (!activo) return null;
-    return <>{children}</>;
+    return activo;
   }
 
   // Si no hay permisoEspecial pero tampoco accion, no se puede verificar
   if (!accion) {
-    return null;
+    return false;
   }
 
   // Compatibilidad hacia atrás: verifica accion contra la pantalla
   const codigo = codigoPantalla || activeModule;
 
   if (!codigo) {
-    return null;
+    return false;
   }
 
   const pantalla = usuario.pantallas.find((p) => p.codigo?.toUpperCase() === codigo?.toUpperCase());
   if (!pantalla) {
-    return null;
+    return false;
   }
 
-  const tienePermiso = pantalla.acciones.includes(accion);
-  if (!tienePermiso) {
+  return pantalla.acciones.includes(accion);
+}
+
+const PermissionGate: React.FC<PermissionGateProps> = ({ codigoPantalla, accion, permisoEspecial, children }) => {
+  const usuario = useAuthStore((s) => s.usuario);
+  const activeModule = useUIStore((s) => s.activeModule);
+
+  if (!verificarPermiso({ usuario, activeModule, codigoPantalla, accion, permisoEspecial })) {
     return null;
   }
 

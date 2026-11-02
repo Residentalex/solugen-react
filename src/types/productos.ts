@@ -66,6 +66,13 @@ export interface CategoriaArticuloDTO {
   idExterno?: string;
   control?: CategoriaArticuloDTO | null;
   grupo?: CategoriaArticuloDTO | null;
+  familia?: FamiliaArticuloDTO | null;
+}
+
+export interface CategoriaArticuloRequestDTO {
+  nombre: string;
+  control?: { codigo?: string } | null;
+  familia?: { idExterno?: string } | null;
 }
 
 export interface UnidadMedidaDTO {
@@ -73,6 +80,14 @@ export interface UnidadMedidaDTO {
   codigo?: string;
   factor?: number;
   idExterno?: number;
+}
+
+export interface ReferenciaProductoDTO {
+  idExterno?: number;
+  referencia: string;
+  presentacionEquivalenteID?: number;
+  presentacionEquivalenteNombre?: string;
+  cantidad: number;
 }
 
 export interface ImpuestoProductoDTO {
@@ -108,6 +123,7 @@ export interface ProductoDTO {
   precio: number;
   referenciaInterna: string;
   upc?: string;
+  numPlu?: string;
   familia?: FamiliaArticuloDTO | null;
   categoria?: CategoriaArticuloDTO | null;
   nota?: string;
@@ -127,6 +143,8 @@ export interface ProductoDTO {
   codigoSuplidor?: string;
   modificaPrecio?: boolean;
   modificaDescripcion?: boolean;
+  precioAuto?: boolean;
+  referencias?: ReferenciaProductoDTO[];
   prodserv?: string;
 }
 

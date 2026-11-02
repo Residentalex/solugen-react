@@ -22,7 +22,6 @@ import {
   SendOutlined,
   HistoryOutlined,
 } from '@ant-design/icons';
-import PermissionGate from '../../components/PermissionGate';
 
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -780,6 +779,30 @@ const FacturaClienteDetalle: React.FC = () => {
         onRevisado={handleRevisado}
         onDesaplicar={async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
+        extraAcciones={id ? [
+          ...(!codigoQR && !!documentoActivo?.ncf ? [{
+            key: 'enviar-dgii',
+            label: 'Enviar DGII',
+            icon: <SendOutlined />,
+            loading: enviandoDGII,
+            disabled: toEstadoNum(documentoActivo.estado) !== 1,
+            permiso: { codigoPantalla: 'FFAC', permisoEspecial: 'pe_marcar_enviado' },
+          }] : []),
+          {
+            key: 'reasignar-ncf',
+            label: 'Reasignar NCF',
+            icon: <FileTextOutlined />,
+            disabled: toEstadoNum(documentoActivo.estado) !== 1,
+            permiso: { codigoPantalla: 'FFAC', permisoEspecial: 'pe_preasignar_ncf' },
+          },
+          ...(!data?.transaccionesAsociadas?.some(t => t.tipoDocumento === 'NC' || (t.documento && t.documento.startsWith('NC-'))) ? [{
+            key: 'nota-credito',
+            label: 'Nota Crédito',
+            icon: <FileTextOutlined />,
+            disabled: toEstadoNum(documentoActivo.estado) !== 1,
+            permiso: { codigoPantalla: 'FFAC', permisoEspecial: 'pe_generar_nccli' },
+          }] : []),
+        ] : undefined}
         extraButtons={id ? (
           <>
             {toEstadoNum(data?.estado) === 3 && reversoData && (
@@ -795,30 +818,7 @@ const FacturaClienteDetalle: React.FC = () => {
               {codigoQR && (
                 <Tag color="success" icon={<CheckCircleOutlined />}>DGII OK</Tag>
               )}
-              {!codigoQR && !!documentoActivo?.ncf && (
-                <PermissionGate codigoPantalla="FFAC" permisoEspecial="pe_marcar_enviado">
-                  <Button icon={<SendOutlined />} size="small" onClick={handleEnviarDGII}
-                    loading={enviandoDGII}
-                    disabled={toEstadoNum(documentoActivo.estado) !== 1}>
-                    Enviar DGII
-                  </Button>
-                </PermissionGate>
-              )}
-              <PermissionGate codigoPantalla="FFAC" permisoEspecial="pe_preasignar_ncf">
-                <Button icon={<FileTextOutlined />} size="small" onClick={handleReasignarNCF}
-                  disabled={toEstadoNum(documentoActivo.estado) !== 1}>
-                  Reasignar NCF
-                </Button>
-              </PermissionGate>
               <Divider type="vertical" />
-              {!data?.transaccionesAsociadas?.some(t => t.tipoDocumento === 'NC' || (t.documento && t.documento.startsWith('NC-'))) && (
-                <PermissionGate codigoPantalla="FFAC" permisoEspecial="pe_generar_nccli">
-                  <Button icon={<FileTextOutlined />} size="small" onClick={() => setModalNCCLIAbierto(true)}
-                    disabled={toEstadoNum(documentoActivo.estado) !== 1}>
-                    Nota Crédito
-                  </Button>
-                </PermissionGate>
-              )}
             </Space>
           </>
         ) : undefined}

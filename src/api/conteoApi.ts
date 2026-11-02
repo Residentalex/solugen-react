@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { ConteoFisicoDTO } from '../types/conteo';
+import type { ConteoFisicoDTO, ConteoImportadoDTO, ImportarConteoDTO } from '../types/conteo';
 import type { ApiResponse } from '../types/auth';
 
 export interface PlantillaConteoFisicoDTO {
@@ -89,6 +89,17 @@ export const conteoApi = {
     const docSinPrefijo = documento.startsWith('IF-') ? documento.slice(3) : documento;
     const { data } = await apiClient.get<ApiResponse<ConteoFisicoDTO>>(
       `${BASE}/${sucursal}/documento/${encodeURIComponent(docSinPrefijo)}`
+    );
+    return data.data;
+  },
+
+  importarConteo: async (
+    sucursal: number,
+    dto: ImportarConteoDTO
+  ): Promise<ConteoImportadoDTO> => {
+    const { data } = await apiClient.post<ApiResponse<ConteoImportadoDTO>>(
+      `${BASE}/${sucursal}/importar`,
+      dto
     );
     return data.data;
   },

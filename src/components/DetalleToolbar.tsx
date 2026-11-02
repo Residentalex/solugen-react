@@ -1,11 +1,12 @@
 import React from 'react';
-import { Space, Button, Modal, Tooltip } from 'antd';
+import { Button, Modal } from 'antd';
 import {
   ArrowLeftOutlined, PrinterOutlined, EditOutlined,
   CheckCircleOutlined, CloseCircleOutlined, RedoOutlined,
   ExclamationCircleOutlined, DeleteOutlined,
 } from '@ant-design/icons';
-import PermissionGate from './PermissionGate';
+import ToolbarAcciones from './ToolbarAcciones';
+import type { ToolbarAccion } from './ToolbarAcciones';
 import { toEstadoNum, toPeriodoNum } from '../utils/estadoDocumento';
 
 interface DetalleToolbarProps {
@@ -30,7 +31,12 @@ interface DetalleToolbarProps {
   showImprimir?: boolean;
   confirmActions?: boolean;
   edicionSinRestricciones?: boolean;
+  /** Slot SOLO para controles no-acción (Switch "Reverso/Original", Tag, Select,
+   *  Divider). Los botones de acción deben ir en `extraAcciones`. */
   extraButtons?: React.ReactNode;
+  /** Acciones adicionales que se fusionan con las de estado respetando la regla
+   *  de máximo 2 visibles. Cada botón de acción suelto va aquí, no en `extraButtons`. */
+  extraAcciones?: ToolbarAccion[];
 }
 
 const { confirm } = Modal;
@@ -52,18 +58,166 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
   onVolver, onImprimir, onImprimirTicket, onEditar, onAplicar, onAnular,
   onPostear, onRevisado, onDesaplicar, onReversar, onEliminar,
   showImprimir = true, confirmActions = true, edicionSinRestricciones = false,
-  extraButtons,
+  extraButtons, extraAcciones,
 }) => {
   const estadoNum = toEstadoNum(estado);
   const periodoNum = toPeriodoNum(periodo);
   // Bloqueo uniforme de la barra durante cualquier operación en vuelo
   const bloqueado = !!(saving || imprimiendo || operacionLoading);
 
-  const wrapConfirm = (titulo: string, handler?: () => any) => {
+  const wrapConfirm = (titulo: string, handler?: () => void): (() => void) | undefined => {
     if (!handler) return undefined;
     if (!confirmActions) return handler;
     return () => accionConfirm(titulo, handler);
   };
+
+  const acciones: ToolbarAccion[] = [
+    // Editar (primary)
+    ...((((estadoNum === 0 && periodoNum !== 6) || edicionSinRestricciones) && revisado !== true && onEditar)
+      ? [{
+          key: 'editar',
+          label: 'Editar',
+          icon: <EditOutlined />,
+          tipo: 'primary' as const,
+          onClick: onEditar,
+          permiso: { codigoPantalla: modulo, accion: 'EDITAR' },
+          prioridad: 100,
+          disabled: bloqueado,
+        }]
+      : []),
+
+    // Aplicar
+    ...((estadoNum === 0 && periodoNum !== 6 && onAplicar)
+      ? [{
+          key: 'aplicar',
+          label: 'Aplicar',
+          icon: <CheckCircleOutlined />,
+          onClick: wrapConfirm('Aplicar', onAplicar),
+          permiso: { codigoPantalla: modulo, accion: 'APLICAR' },
+          prioridad: 90,
+          disabled: bloqueado,
+          estilo: { background: '#389e0d', borderColor: '#389e0d', color: '#fff' } as React.CSSProperties,
+        }]
+      : []),
+
+    // Imprimir
+    ...((showImprimir && onImprimir)
+      ? [{
+          key: 'imprimir',
+          label: 'Imprimir',
+          icon: <PrinterOutlined />,
+          soloIcono: true,
+          tooltip: 'Imprimir',
+          loading: imprimiendo,
+          onClick: onImprimir,
+          permiso: { codigoPantalla: modulo, accion: 'IMPRIMIR' },
+          prioridad: 80,
+          disabled: bloqueado,
+        }]
+      : []),
+
+    // Postear
+    ...(((estadoNum === 1 || estadoNum === 3) && revisado !== true && periodoNum !== 6 && onPostear)
+      ? [{
+          key: 'postear',
+          label: 'Postear',
+          icon: <CheckCircleOutlined />,
+          onClick: wrapConfirm('Postear', onPostear),
+          permiso: { codigoPantalla: modulo, accion: 'POSTEAR' },
+          prioridad: 70,
+          disabled: bloqueado,
+        }]
+      : []),
+
+    // Revisado
+    ...((estadoNum === 1 && revisado !== true && periodoNum !== 6 && onRevisado)
+      ? [{
+          key: 'revisado',
+          label: 'Revisado',
+          icon: <CheckCircleOutlined />,
+          loading: saving,
+          onClick: wrapConfirm('Marcar como revisado', onRevisado),
+          permiso: { codigoPantalla: modulo, accion: 'AUTORIZAR' },
+          prioridad: 60,
+          disabled: bloqueado,
+        }]
+      : []),
+
+    // Desaplicar
+    ...((estadoNum === 1 && revisado !== true && periodoNum !== 6 && onDesaplicar)
+      ? [{
+          key: 'desaplicar',
+          label: 'Desaplicar',
+          icon: <RedoOutlined />,
+          loading: saving,
+          onClick: wrapConfirm('Desaplicar', onDesaplicar),
+          permiso: { codigoPantalla: modulo, accion: 'DESAPLICAR' },
+          prioridad: 50,
+          disabled: bloqueado,
+        }]
+      : []),
+
+    // Ticket
+    ...(onImprimirTicket
+      ? [{
+          key: 'ticket',
+          label: 'Ticket',
+          icon: <PrinterOutlined />,
+          onClick: onImprimirTicket,
+          permiso: { codigoPantalla: modulo, accion: 'IMPRIMIR' },
+          prioridad: 40,
+          disabled: bloqueado,
+        }]
+      : []),
+
+    // Anular (destructiva)
+    ...((revisado !== true && estadoNum !== 3 && periodoNum !== 6 && onAnular)
+      ? [{
+          key: 'anular',
+          label: 'Anular',
+          icon: <CloseCircleOutlined />,
+          tipo: 'danger' as const,
+          destructiva: true,
+          loading: saving,
+          onClick: wrapConfirm('Anular', onAnular),
+          permiso: { codigoPantalla: modulo, accion: 'ANULAR' },
+          prioridad: 30,
+          disabled: bloqueado,
+        }]
+      : []),
+
+    // Reversar (destructiva)
+    ...((estadoNum === 1 && revisado === true && periodoNum !== 6 && onReversar)
+      ? [{
+          key: 'reversar',
+          label: 'Reversar',
+          icon: <RedoOutlined />,
+          tipo: 'danger' as const,
+          destructiva: true,
+          loading: saving,
+          onClick: wrapConfirm('Reversar', onReversar),
+          permiso: { codigoPantalla: modulo, accion: 'REVERSAR' },
+          prioridad: 20,
+          disabled: bloqueado,
+        }]
+      : []),
+
+    // Eliminar (destructiva)
+    ...(onEliminar
+      ? [{
+          key: 'eliminar',
+          label: 'Eliminar',
+          icon: <DeleteOutlined />,
+          tipo: 'danger' as const,
+          destructiva: true,
+          loading: saving,
+          onClick: wrapConfirm('Eliminar', onEliminar),
+          permiso: { codigoPantalla: modulo, permisoEspecial: 'pe_modificar_admin' },
+          prioridad: 10,
+          disabled: bloqueado,
+        }]
+      : []),
+  ];
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8, flexWrap: 'wrap' }}>
@@ -71,124 +225,10 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
         Volver
       </Button>
       <div style={{ flex: 1 }} />
-      <Space wrap>
-        {showImprimir && onImprimir && (
-          <PermissionGate codigoPantalla={modulo} accion="IMPRIMIR">
-            <Tooltip title="Imprimir">
-              <Button icon={<PrinterOutlined />} aria-label="Imprimir" loading={imprimiendo} disabled={bloqueado} onClick={onImprimir} />
-            </Tooltip>
-          </PermissionGate>
-        )}
-
-        {onImprimirTicket && (
-          <PermissionGate codigoPantalla={modulo} accion="IMPRIMIR">
-            <Button icon={<PrinterOutlined />} onClick={onImprimirTicket} disabled={bloqueado}>
-              Ticket
-            </Button>
-          </PermissionGate>
-        )}
-
-        {extraButtons}
-
-        {((estadoNum === 0 && periodoNum !== 6) || edicionSinRestricciones) && revisado !== true && onEditar && (
-          <PermissionGate codigoPantalla={modulo} accion="EDITAR">
-            <Button type="primary" icon={<EditOutlined />} onClick={onEditar} disabled={bloqueado}>Editar</Button>
-          </PermissionGate>
-        )}
-
-        {estadoNum === 0 && periodoNum !== 6 && onAplicar && (
-          <PermissionGate codigoPantalla={modulo} accion="APLICAR">
-            <Button
-              style={{ background: '#389e0d', borderColor: '#389e0d', color: '#fff' }}
-              icon={<CheckCircleOutlined />}
-              disabled={bloqueado}
-              onClick={wrapConfirm('Aplicar', onAplicar)}
-            >
-              Aplicar
-            </Button>
-          </PermissionGate>
-        )}
-
-        {revisado !== true && estadoNum !== 3 && periodoNum !== 6 && onAnular && (
-          <PermissionGate codigoPantalla={modulo} accion="ANULAR">
-            <Button
-              danger
-              icon={<CloseCircleOutlined />}
-              loading={saving}
-              disabled={bloqueado}
-              onClick={wrapConfirm('Anular', onAnular)}
-            >
-              Anular
-            </Button>
-          </PermissionGate>
-        )}
-
-        {(estadoNum === 1 || estadoNum === 3) && revisado !== true && periodoNum !== 6 && onPostear && (
-          <PermissionGate codigoPantalla={modulo} accion="POSTEAR">
-            <Button
-              icon={<CheckCircleOutlined />}
-              disabled={bloqueado}
-              onClick={wrapConfirm('Postear', onPostear)}
-            >
-              Postear
-            </Button>
-          </PermissionGate>
-        )}
-
-        {estadoNum === 1 && revisado !== true && periodoNum !== 6 && onRevisado && (
-          <PermissionGate codigoPantalla={modulo} accion="AUTORIZAR">
-            <Button
-              icon={<CheckCircleOutlined />}
-              loading={saving}
-              disabled={bloqueado}
-              onClick={wrapConfirm('Marcar como revisado', onRevisado)}
-            >
-              Revisado
-            </Button>
-          </PermissionGate>
-        )}
-
-        {estadoNum === 1 && revisado !== true && periodoNum !== 6 && onDesaplicar && (
-          <PermissionGate codigoPantalla={modulo} accion="DESAPLICAR">
-            <Button
-              icon={<RedoOutlined />}
-              loading={saving}
-              disabled={bloqueado}
-              onClick={wrapConfirm('Desaplicar', onDesaplicar)}
-            >
-              Desaplicar
-            </Button>
-          </PermissionGate>
-        )}
-
-        {estadoNum === 1 && revisado === true && periodoNum !== 6 && onReversar && (
-          <PermissionGate codigoPantalla={modulo} accion="REVERSAR">
-            <Button
-              danger
-              icon={<RedoOutlined />}
-              loading={saving}
-              disabled={bloqueado}
-              onClick={wrapConfirm('Reversar', onReversar)}
-            >
-              Reversar
-            </Button>
-          </PermissionGate>
-        )}
-
-        {onEliminar && (
-          <PermissionGate codigoPantalla={modulo} permisoEspecial="pe_modificar_admin">
-            <Button
-              danger
-              icon={<DeleteOutlined />}
-              loading={saving}
-              disabled={bloqueado}
-              onClick={wrapConfirm('Eliminar', onEliminar)}
-            >
-              Eliminar
-            </Button>
-          </PermissionGate>
-        )}
-      </Space>
+      {extraButtons}
+      <ToolbarAcciones
+        acciones={[...acciones, ...(extraAcciones ?? []).map((a) => ({ ...a, prioridad: a.prioridad ?? 40, disabled: a.disabled || bloqueado }))]}
+      />
     </div>
   );
 };

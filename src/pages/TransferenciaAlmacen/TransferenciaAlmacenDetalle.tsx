@@ -41,6 +41,7 @@ const DETALLE_COLUMNS_CONFIG: ColumnConfig[] = [
   { key: 'codigo', label: 'Código', defaultVisible: true },
   { key: 'articulo', label: 'Artículo', defaultVisible: true },
   { key: 'cantidad', label: 'Cantidad', defaultVisible: true },
+  { key: 'costo', label: 'Costo', defaultVisible: true },
   { key: 'factor', label: 'Factor', defaultVisible: false },
 ];
 
@@ -298,6 +299,16 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
       ),
     },
     {
+      title: 'Costo',
+      dataIndex: 'costo',
+      key: 'costo',
+      width: 130,
+      align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
+      render: (_: any, record: any) => <div>{formatNumber(record.costo || 0)}</div>,
+    },
+    {
       title: 'Factor',
       dataIndex: 'medida.factor',
       key: 'factor',
@@ -496,7 +507,7 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
           key: 'detalles',
           icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
           children: (
-            <Table dataSource={detallesFiltrados} columns={detalleColumnsFiltered} rowKey="id" size="small" pagination={false} scroll={{ x: 1000 }} />
+            <Table dataSource={detallesFiltrados} columns={detalleColumnsFiltered} rowKey="id" size="small" pagination={false} scroll={{ x: 1130 }} />
           ),
         },
         {

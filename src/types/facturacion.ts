@@ -115,6 +115,12 @@ export interface MetodoPagoDTO {
   codigoDocumento: string;
 }
 
+// Basado en DocumentoTipoDTO.cs (catálogo DOCUMENTOTIPO)
+export interface DocumentoTipoDTO {
+  codigo: string;
+  descripcion: string;
+}
+
 // --- Tipos compartidos de facturación ---
 export interface FacturaVistaDTO {
   id: number;
@@ -299,4 +305,30 @@ export interface Reporte606DTO {
   razonSocial: string;
   documento: string;
   sucursal: string;
+}
+
+export interface Reporte607DTO {
+  rnc: string;
+  rncid: number;
+  tipoNCF: string;
+  ncf: string;
+  ncfModificado: string;
+  fechaNCF: string;
+  fechaRetencion: string;
+  monto: number;
+  impuestoFacturado: number;
+  isc: number;
+  otrosImpuestos: number;
+  propinaLegal: number;
+  documento: string;
+  razonSocial: string;
+  sucursal: string;
+  tipoIngreso: string;
+  efectivo: number;
+  banco: number;
+  tarjetas: number;
+  ventasCredito: number;
+  otrasFormasVenta: number;
+  bonos: number;
+  turno: string;
 }

@@ -12,6 +12,7 @@ import {
   Modal,
   Spin,
   Empty,
+  Tag,
   theme,
 } from 'antd';
 import { Select } from '../../components/Select';
@@ -26,7 +27,10 @@ import {
   CheckOutlined,
   FileExcelOutlined,
   SearchOutlined,
+  FilterFilled,
+  FilterOutlined,
 } from '@ant-design/icons';
+import FiltroSeleccionDropdown from '../../components/FiltroSeleccionDropdown';
 import dayjs from 'dayjs';
 import { useUIStore } from '../../stores/uiStore';
 import FechaColumnCell from '../../components/FechaColumnCell';
@@ -65,6 +69,13 @@ function toTitleCase(str?: string): string {
     .join(' ');
 }
 
+const ETIQUETA_SIN_MENSAJE = '(Sin mensaje)';
+
+function mensajeValor(item: EnvioDGIIDTO): string {
+  const m = item.respuestaDGII && item.respuestaDGII.trim() ? item.respuestaDGII : '';
+  return m || ETIQUETA_SIN_MENSAJE;
+}
+
 const CFacturasElectronicas: React.FC = () => {
   const { token } = theme.useToken();
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
@@ -81,11 +92,16 @@ const CFacturasElectronicas: React.FC = () => {
   const [resumen, setResumen] = useState<ResumenTipoNcfDTO[]>([]);
   const [resumenSucursal, setResumenSucursal] = useState<ResumenTipoNcfSucursalDTO[]>([]);
   const [emitidos, setEmitidos] = useState<EnvioDGIIDTO[]>([]);
-  const [pendientes, setPendientes] = useState<EnvioDGIIDTO[]>([]);
+  // Vista Pendientes: se cargan todos los registros del rango (sin paginar) para
+  // permitir filtro por mensaje y acciones masivas sobre todas las paginas.
+  const [pendientesCompletos, setPendientesCompletos] = useState<EnvioDGIIDTO[]>([]);
+  const [totalEmitidosTabla, setTotalEmitidosTabla] = useState(0);
+  const [totalPendientesTabla, setTotalPendientesTabla] = useState(0);
   const [pagina, setPagina] = useState(1);
   const [tamanoPagina, setTamanoPagina] = useState(25);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filtrosActivos, setFiltrosActivos] = useState<Record<string, any>>({});
 
   // Bloqueo global de acciones masivas: Enviar, Reasignar y Marcar nunca coexisten
   const [procesando, setProcesando] = useState(false);
@@ -133,12 +149,21 @@ const CFacturasElectronicas: React.FC = () => {
     const skip = (page - 1) * pageSize;
     setCargandoTabla(true);
     try {
-      const [emi, pen] = await Promise.all([
+      const [emi, penTotal] = await Promise.all([
         dgiiApi.obtenerEmitidos(desde, hasta, skip, pageSize),
-        dgiiApi.obtenerPendientes(desde, hasta, skip, pageSize),
+        dgiiApi.obtenerPendientes(desde, hasta, 0, 1),
       ]);
-      setEmitidos(emi || []);
-      setPendientes(pen || []);
+      setEmitidos(emi.data || []);
+      setTotalEmitidosTabla(emi.total ?? 0);
+
+      const totalPen = penTotal.total ?? 0;
+      setTotalPendientesTabla(totalPen);
+      if (totalPen > 0) {
+        const pen = await dgiiApi.obtenerPendientes(desde, hasta, 0, totalPen);
+        setPendientesCompletos(pen.data || []);
+      } else {
+        setPendientesCompletos([]);
+      }
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar datos DGII');
     } finally {
@@ -154,13 +179,18 @@ const CFacturasElectronicas: React.FC = () => {
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar, cargarDashboard, cargarTabla, tamanoPagina]);
 
+  // Al cambiar los filtros (mensaje) volver a la primera pagina.
+  useEffect(() => {
+    setPagina(1);
+  }, [filtrosActivos]);
+
   const TIPO_DEV = 20;
   const TIPO_FAC = 35;
   const METODO_ELECTRONICA = 1;
 
   function getSelectedItems(ids: React.Key[]): EnvioDGIIDTO[] {
     const set = new Set(ids.map(String));
-    return pendientes.filter((p) => set.has(`${p.sucursal}-${p.transaccionID}`));
+    return pendientesCompletos.filter((p) => set.has(`${p.sucursal}-${p.transaccionID}`));
   }
 
   function determinarTipoNCF(item: EnvioDGIIDTO, metodoFacturacion: number): string {
@@ -232,12 +262,13 @@ const CFacturasElectronicas: React.FC = () => {
             message.success({ content: `${items.length} comprobante(s) enviado(s) correctamente`, key, duration: 3 });
           }
           setSelectedRowKeys([]);
+          setPagina(1);
           cargarTabla(1, tamanoPagina);
           finalizarProcesamiento();
         }
       },
     });
-  }, [pendientes, cargarTabla, tamanoPagina, iniciarProcesamiento, finalizarProcesamiento]);
+  }, [pendientesCompletos, cargarTabla, tamanoPagina, iniciarProcesamiento, finalizarProcesamiento]);
 
   const handleReasignar = useCallback(async (ids: React.Key[]) => {
     const items = getSelectedItems(ids);
@@ -281,13 +312,14 @@ const CFacturasElectronicas: React.FC = () => {
             message.success({ content: `${items.length} NCF reasignado(s) correctamente`, key, duration: 3 });
           }
           setSelectedRowKeys([]);
+          setPagina(1);
           cargarTabla(1, tamanoPagina);
         } finally {
           finalizarProcesamiento();
         }
       },
     });
-  }, [pendientes, cargarTabla, tamanoPagina, iniciarProcesamiento, finalizarProcesamiento]);
+  }, [pendientesCompletos, cargarTabla, tamanoPagina, iniciarProcesamiento, finalizarProcesamiento]);
 
   const handleMarcarEnviado = useCallback(async (ids: React.Key[]) => {
     const items = getSelectedItems(ids);
@@ -324,18 +356,19 @@ const CFacturasElectronicas: React.FC = () => {
             message.success({ content: `${items.length} comprobante(s) marcado(s) como enviado(s)`, key, duration: 3 });
           }
           setSelectedRowKeys([]);
+          setPagina(1);
           cargarTabla(1, tamanoPagina);
         } finally {
           finalizarProcesamiento();
         }
       },
     });
-  }, [pendientes, cargarTabla, tamanoPagina, iniciarProcesamiento, finalizarProcesamiento]);
+  }, [pendientesCompletos, cargarTabla, tamanoPagina, iniciarProcesamiento, finalizarProcesamiento]);
 
   const handleExportarExcel = async () => {
     const sucursalActiva = useAuthStore.getState().sucursalActiva;
     const companyName = await getCompanyName(sucursalActiva);
-    const dataSource = dataTabla || [];
+    const dataSource = filteredData || [];
     const exportCols = columns.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones');
     const columnHeaders = exportCols.map((col: any) => col.title);
     const dataRows = dataSource.map((item: any) =>
@@ -357,7 +390,7 @@ const CFacturasElectronicas: React.FC = () => {
     () => resumen.reduce((sum, r) => sum + (r.cantidad || 0), 0),
     [resumen]
   );
-  const totalPendientes = pendientes.length;
+  const totalPendientes = totalPendientesTabla;
   const montoTotal = useMemo(
     () => resumen.reduce((sum, r) => sum + (r.totalMonto || 0), 0),
     [resumen]
@@ -499,18 +532,57 @@ const CFacturasElectronicas: React.FC = () => {
     };
   }, [resumenSucursal]);
 
-  const dataTabla = vista === 'emitidos' ? emitidos : pendientes;
+  const dataTabla = vista === 'emitidos' ? emitidos : pendientesCompletos;
+
+  const filtrosMensaje: string[] = filtrosActivos.respuestaDGII?.valor ?? [];
 
   const filteredData = useMemo(() => {
-    const term = searchTerm != null ? String(searchTerm).trim() : '';
-    return dataTabla.filter(
-      (item) =>
-        !searchTerm ||
-        (item.documento && item.documento.toLowerCase().includes(term.toLowerCase())) ||
-        (item.ncf && item.ncf.toLowerCase().includes(term.toLowerCase())) ||
-        (item.cliente && item.cliente.toLowerCase().includes(term.toLowerCase()))
-    );
-  }, [dataTabla, searchTerm]);
+    const term = searchTerm != null ? String(searchTerm).trim().toLowerCase() : '';
+    const mensajes: string[] = filtrosActivos.respuestaDGII?.valor ?? [];
+    return dataTabla.filter((item) => {
+      const coincideBusqueda =
+        !term ||
+        (item.documento && item.documento.toLowerCase().includes(term)) ||
+        (item.ncf && item.ncf.toLowerCase().includes(term)) ||
+        (item.cliente && item.cliente.toLowerCase().includes(term));
+      const coincideMensaje = mensajes.length === 0 || mensajes.includes(mensajeValor(item));
+      return coincideBusqueda && coincideMensaje;
+    });
+  }, [dataTabla, searchTerm, filtrosActivos]);
+
+  // Vista Pendientes: paginacion en cliente sobre la lista completa filtrada.
+  const pageData = useMemo(
+    () =>
+      vista === 'pendientes'
+        ? filteredData.slice((pagina - 1) * tamanoPagina, pagina * tamanoPagina)
+        : filteredData,
+    [vista, filteredData, pagina, tamanoPagina]
+  );
+
+  const visibleRowKeys = useMemo(
+    () => new Set(pageData.map((r) => `${r.sucursal}-${r.transaccionID}`)),
+    [pageData]
+  );
+
+  const haySeleccionFueraDePagina = useMemo(
+    () => selectedRowKeys.some((k) => !visibleRowKeys.has(String(k))),
+    [selectedRowKeys, visibleRowKeys]
+  );
+
+  const todosSeleccionados = useMemo(() => {
+    if (filteredData.length === 0) return false;
+    const sel = new Set(selectedRowKeys.map(String));
+    return filteredData.every((r) => sel.has(`${r.sucursal}-${r.transaccionID}`));
+  }, [filteredData, selectedRowKeys]);
+
+  const handleSeleccionarTodo = useCallback(() => {
+    if (procesandoRef.current) return;
+    if (todosSeleccionados) {
+      setSelectedRowKeys([]);
+    } else {
+      setSelectedRowKeys(filteredData.map((r) => `${r.sucursal}-${r.transaccionID}`));
+    }
+  }, [filteredData, todosSeleccionados]);
 
   const columns = useMemo(() => {
     const base: any[] = [
@@ -533,6 +605,21 @@ const CFacturasElectronicas: React.FC = () => {
     if (vista === 'pendientes') {
       base.splice(4, 0, {
         title: 'Mensaje DGII', dataIndex: 'respuestaDGII', key: 'respuestaDGII', width: 350,
+        filterDropdown: ({ confirm, clearFilters }: any) => (
+          <FiltroSeleccionDropdown
+            dataSource={pendientesCompletos}
+            dataIndex="respuestaDGII"
+            render={(r) => mensajeValor(r as EnvioDGIIDTO)}
+            filtroKey="respuestaDGII"
+            filtrosActivos={filtrosActivos}
+            setFiltrosActivos={setFiltrosActivos}
+            confirm={confirm}
+            clearFilters={clearFilters}
+          />
+        ),
+        filterIcon: () => (filtrosActivos.respuestaDGII?.valor?.length
+          ? <FilterFilled style={{ color: '#556ee6', fontSize: 12 }} />
+          : <FilterOutlined style={{ color: '#8c8c8c', fontSize: 12 }} />),
         render: (v: string) => v ? (
           <span style={{ color: '#f46a6a', fontSize: 12 }}>{v}</span>
         ) : (
@@ -542,23 +629,17 @@ const CFacturasElectronicas: React.FC = () => {
     }
 
     base.push({
-      title: 'Sucursal', dataIndex: 'sucursal', key: 'sucursal', width: 140,
+      title: 'Sucursal', dataIndex: 'sucursal', key: 'sucursal', width: 180,
       render: (v: number) => SUCURSAL_NOMBRE[v] || String(v)
     });
 
     return base;
-  }, [vista]);
+  }, [vista, filtrosActivos, pendientesCompletos]);
 
   const hayBusqueda = (searchTerm ?? '').trim().length > 0;
+  const hayFiltroMensaje = filtrosMensaje.length > 0;
 
-  // El backend no devuelve el conteo total, solo la pagina solicitada.
-  // Cuando la pagina viene llena el total es un minimo (centinela pagina * tamanoPagina + 1)
-  // usado solo para habilitar el boton de siguiente pagina; por eso showTotal lo rotula
-  // como "al menos N" en lugar de un total exacto. Cuando viene parcial el total es exacto.
-  const paginaLlena = dataTabla.length >= tamanoPagina;
-  const totalRegistros = paginaLlena
-    ? pagina * tamanoPagina + 1
-    : (pagina - 1) * tamanoPagina + dataTabla.length;
+  const totalRegistros = vista === 'emitidos' ? totalEmitidosTabla : filteredData.length;
 
   const statCardStyle = (fondo: string) => ({
     borderRadius: 12,
@@ -708,6 +789,15 @@ const CFacturasElectronicas: React.FC = () => {
               style={{ width: '100%', maxWidth: 400 }}
             />
             <div style={{ flex: 1 }} />
+            {vista === 'pendientes' && (
+              <Button
+                size="small"
+                disabled={procesando || filteredData.length === 0}
+                onClick={handleSeleccionarTodo}
+              >
+                {todosSeleccionados ? 'Deseleccionar todo' : `Seleccionar todo (${filteredData.length})`}
+              </Button>
+            )}
           </div>
         </div>
         {vista === 'pendientes' && selectedRowKeys.length > 0 && (
@@ -720,7 +810,12 @@ const CFacturasElectronicas: React.FC = () => {
             <span className="paces-text-primary" style={{ fontSize: 13, fontWeight: 600, marginRight: 4 }}>
               {selectedRowKeys.length}
             </span>
-            <span style={{ fontSize: 13 }} className="paces-text-light">seleccionado(s)</span>
+            <span style={{ fontSize: 13 }} className="paces-text-light">
+              seleccionado(s){haySeleccionFueraDePagina ? ' ' : ''}
+            </span>
+            {haySeleccionFueraDePagina && (
+              <Tag color="blue" style={{ marginInlineEnd: 0 }}>todas las páginas</Tag>
+            )}
             <div style={{ flex: 1 }} />
             <PermissionGate permisoEspecial="pe_reenviar_DGII">
               <Button type="primary" size="small" icon={<SendOutlined />} disabled={procesando}
@@ -750,12 +845,12 @@ const CFacturasElectronicas: React.FC = () => {
             onChange: (keys) => { if (procesandoRef.current) return; setSelectedRowKeys(keys); },
           }}
           columns={columns}
-          dataSource={filteredData}
+          dataSource={pageData}
           rowKey={(record) => `${record.sucursal}-${record.transaccionID}`}
           loading={cargandoTabla}
           locale={{
             emptyText: <div style={{ minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Empty description={hayBusqueda
+              <Empty description={(hayBusqueda || hayFiltroMensaje)
                 ? 'No se encontraron comprobantes con los filtros aplicados'
                 : 'No hay comprobantes registrados'} />
             </div>,
@@ -767,16 +862,16 @@ const CFacturasElectronicas: React.FC = () => {
             pageSize: tamanoPagina,
             total: totalRegistros,
             showSizeChanger: false,
-            showTotal: (total, range) => paginaLlena
-              ? `${range[0]}-${range[1]} de al menos ${total} registros`
-              : `${range[0]}-${range[1]} de ${total} registros`,
+            showTotal: (total, range) => `${range[0]}-${range[1]} de ${total} registros`,
           }}
           onChange={(pagination) => {
             const newPage = pagination.current || 1;
             const newPageSize = pagination.pageSize || 25;
             setPagina(newPage);
             setTamanoPagina(newPageSize);
-            cargarTabla(newPage, newPageSize);
+            if (vista === 'emitidos') {
+              cargarTabla(newPage, newPageSize);
+            }
           }}
         />
       </Card>

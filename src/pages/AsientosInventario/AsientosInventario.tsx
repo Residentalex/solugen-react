@@ -1,18 +1,20 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
-  Card, Input, Button, Typography, message, Spin, DatePicker, Switch,
-  Space, Row, Col, Table, Empty, 
+  Card, Button, Typography, message, Spin, DatePicker, Switch,
+  Space, Row, Col, Table, Tabs, Empty,
 } from 'antd';
 import { Select } from '../../components/Select';
-import { SearchOutlined, CloseOutlined, TableOutlined } from '@ant-design/icons';
+import { TableOutlined, PrinterOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { asientosInventarioApi } from '../../api/asientosInventarioApi';
 import { documentosApi } from '../../api/documentosApi';
+import { parametrosApi } from '../../api/parametrosApi';
+import { cuentaContableApi } from '../../api/cuentaContableApi';
 import { formatDateParam, extraerMensajeError } from '../../utils/formats';
-import BuscarCuentaContableModal from '../../components/BuscarCuentaContableModal/BuscarCuentaContableModal';
+import { Sucursal } from '../../types/auth';
 import type { CuentaContableResumenDTO, ReporteAsientosInventarioItem } from '../../types/contabilidad';
 import type { DocumentoDTO } from '../../types/documento';
 
@@ -92,6 +94,23 @@ const calcularTotales = (filas: FilaCalculada[]): TotalesCentavos => {
   return acc;
 };
 
+/** Acumula totales ya calculados (para el Total General del resumen por cuenta). */
+const sumarTotales = (totales: TotalesCentavos[]): TotalesCentavos => {
+  const acc = totales.reduce<TotalesCentavos>(
+    (a, t) => ({
+      debitos: a.debitos + t.debitos,
+      creditos: a.creditos + t.creditos,
+      montoAuxiliar: a.montoAuxiliar + t.montoAuxiliar,
+      balance: 0,
+      diferencia: 0,
+    }),
+    { debitos: 0, creditos: 0, montoAuxiliar: 0, balance: 0, diferencia: 0 },
+  );
+  acc.balance = acc.debitos - acc.creditos;
+  acc.diferencia = acc.balance - acc.montoAuxiliar;
+  return acc;
+};
+
 /**
  * Agrupa por cuenta contable preservando el orden del backend
  * (las filas ya llegan ordenadas por cuenta y `Existencia` primero dentro del grupo).
@@ -125,9 +144,23 @@ type FilaReporte =
   | { tipo: 'subtotal'; key: string; totales: TotalesCentavos }
   | { tipo: 'total'; key: string; totales: TotalesCentavos };
 
+/** Totales por cuenta para la vista resumida (en centavos). */
+interface FilaResumen {
+  key: string;
+  noCuenta: string;
+  nombre: string;
+  totales: TotalesCentavos;
+}
+
+/** Fila plana para la tabla resumen: una fila por cuenta más la fila de Total General. */
+type FilaResumenTabla =
+  | { tipo: 'cuenta'; key: string; noCuenta: string; nombre: string; totales: TotalesCentavos }
+  | { tipo: 'total'; key: string; totales: TotalesCentavos };
+
 const AsientosInventario: React.FC = () => {
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const sucursalContable = useAuthStore((s) => s.sucursalContable);
+  const [sucursalContableResuelta, setSucursalContableResuelta] = useState<Sucursal>(sucursalContable);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
   const updateToolbar = useUIStore((s) => s.updateToolbar);
@@ -140,10 +173,9 @@ const AsientosInventario: React.FC = () => {
     dayjs(),
   ]);
 
-  // Cuenta contable (opcional)
-  const [noCuenta, setNoCuenta] = useState<string | undefined>(undefined);
-  const [nomCuenta, setNomCuenta] = useState('');
-  const [modalCuentaAbierto, setModalCuentaAbierto] = useState(false);
+  // Cuentas contables (opcional, selección múltiple)
+  const [cuentasSeleccionadas, setCuentasSeleccionadas] = useState<CuentaContableResumenDTO[]>([]);
+  const [cuentasDisponibles, setCuentasDisponibles] = useState<CuentaContableResumenDTO[]>([]);
 
   // Tipo de documento (opcional, mutuamente excluyente con la cuenta)
   const [tipoDocumento, setTipoDocumento] = useState<string | undefined>(undefined);
@@ -158,6 +190,7 @@ const AsientosInventario: React.FC = () => {
   const [items, setItems] = useState<ReporteAsientosInventarioItem[]>([]);
   const [consultando, setConsultando] = useState(false);
   const [consultado, setConsultado] = useState(false);
+  const [imprimiendo, setImprimiendo] = useState(false);
 
   /* ──── UI setup ──── */
 
@@ -178,6 +211,32 @@ const AsientosInventario: React.FC = () => {
       .obtenerListado(sucursalActiva)
       .then(setDocumentos)
       .catch((err) => console.warn('Error al cargar documentos para filtro', err));
+  }, [sucursalActiva]);
+
+  useEffect(() => {
+    let cancelado = false;
+    parametrosApi
+      .obtenerSucursalContable(sucursalActiva)
+      .then((s) => {
+        if (!cancelado && s != null) setSucursalContableResuelta(s as Sucursal);
+      })
+      .catch((err) => {
+        message.error(extraerMensajeError(err, 'Error al obtener la sucursal contable'));
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [sucursalActiva]);
+
+  /* ──── Carga de cuentas contables auxiliares ──── */
+
+  useEffect(() => {
+    cuentaContableApi
+      .obtenerAuxiliares(sucursalActiva)
+      .then(setCuentasDisponibles)
+      .catch((err) => {
+        message.error(extraerMensajeError(err, 'Error al cargar las cuentas contables'));
+      });
   }, [sucursalActiva]);
 
   /* ──── Derivados ──── */
@@ -202,6 +261,36 @@ const AsientosInventario: React.FC = () => {
     return filas;
   }, [grupos, totalGeneral]);
 
+  const resumenPorCuenta = useMemo<FilaResumen[]>(() => {
+    return cuentasSeleccionadas.map((cuenta) => {
+      const filas = items
+        .filter((item) => item.cuentaContableNoCuenta === cuenta.noCuenta)
+        .map(calcularFila);
+      return {
+        key: cuenta.noCuenta,
+        noCuenta: cuenta.noCuenta,
+        nombre: cuenta.nombre,
+        totales: calcularTotales(filas),
+      };
+    });
+  }, [cuentasSeleccionadas, items]);
+
+  const filasResumen = useMemo<FilaResumenTabla[]>(() => {
+    const filas: FilaResumenTabla[] = resumenPorCuenta.map((r) => ({
+      tipo: 'cuenta',
+      key: r.key,
+      noCuenta: r.noCuenta,
+      nombre: r.nombre,
+      totales: r.totales,
+    }));
+    filas.push({
+      tipo: 'total',
+      key: 't-total',
+      totales: sumarTotales(resumenPorCuenta.map((r) => r.totales)),
+    });
+    return filas;
+  }, [resumenPorCuenta]);
+
   const docOptions = useMemo(
     () => documentos.map((d) => ({ value: d.codigo, label: `${d.codigo} - ${d.nombre || ''}` })),
     [documentos],
@@ -213,44 +302,93 @@ const AsientosInventario: React.FC = () => {
     setConsultando(true);
     setItems([]);
     try {
-      const filtros = {
+      const filtrosBase = {
         fechaInicial: formatDateParam(fechas[0].startOf('day').toDate()),
         fechaFinal: formatDateParam(fechas[1].endOf('day').toDate()),
-        noCuenta: noCuenta || undefined,
         tipoDocumento: tipoDocumento || undefined,
         alterno,
         balance,
-        sucursalContable,
+        sucursalContable: sucursalContableResuelta,
       };
-      const res = await asientosInventarioApi.obtenerDatos(sucursalActiva, filtros);
-      setItems(res.items ?? []);
+
+      if (cuentasSeleccionadas.length === 0) {
+        // Sin cuentas: una sola llamada con noCuenta indefinido (comportamiento actual).
+        const res = await asientosInventarioApi.obtenerDatos(sucursalActiva, {
+          ...filtrosBase,
+          noCuenta: undefined,
+        });
+        setItems(res.items ?? []);
+      } else if (cuentasSeleccionadas.length === 1) {
+        // Una cuenta: una llamada con noCuenta = cuenta.noCuenta.
+        const res = await asientosInventarioApi.obtenerDatos(sucursalActiva, {
+          ...filtrosBase,
+          noCuenta: cuentasSeleccionadas[0].noCuenta,
+        });
+        setItems(res.items ?? []);
+      } else {
+        // Varias cuentas: una llamada por cuenta y se concatenan los items.
+        const resultados = await Promise.all(
+          cuentasSeleccionadas.map((cuenta) =>
+            asientosInventarioApi.obtenerDatos(sucursalActiva, {
+              ...filtrosBase,
+              noCuenta: cuenta.noCuenta,
+            }),
+          ),
+        );
+        setItems(resultados.flatMap((res) => res.items ?? []));
+      }
     } catch (err) {
       message.error(extraerMensajeError(err, 'Error al consultar los datos'));
     } finally {
       setConsultando(false);
       setConsultado(true);
     }
-  }, [sucursalActiva, sucursalContable, fechas, noCuenta, tipoDocumento, alterno, balance]);
+  }, [sucursalActiva, sucursalContableResuelta, fechas, cuentasSeleccionadas, tipoDocumento, alterno, balance]);
 
-  const seleccionarCuenta = (cuenta: CuentaContableResumenDTO) => {
-    setNoCuenta(cuenta.noCuenta);
-    setNomCuenta(`${cuenta.noCuenta} - ${cuenta.nombre}`);
+  const handleImprimir = async () => {
+    if (items.length === 0) {
+      message.warning('No hay datos para imprimir');
+      return;
+    }
+    setImprimiendo(true);
+    try {
+      const filtros = {
+        fechaInicial: formatDateParam(fechas[0].startOf('day').toDate()),
+        fechaFinal: formatDateParam(fechas[1].endOf('day').toDate()),
+        noCuenta: cuentasSeleccionadas.length
+          ? cuentasSeleccionadas.map((c) => c.noCuenta).join(', ')
+          : undefined,
+        tipoDocumento: tipoDocumento || undefined,
+        alterno,
+        balance,
+        sucursalContable: sucursalContableResuelta,
+      };
+      const blob = await asientosInventarioApi.imprimir(sucursalActiva, filtros, items);
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, '_blank');
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+    } catch (err) {
+      message.error(extraerMensajeError(err, 'Error al generar el PDF'));
+    } finally {
+      setImprimiendo(false);
+    }
+  };
+
+  const handleCuentasChange = (vals: string[]) => {
+    setCuentasSeleccionadas(cuentasDisponibles.filter((c) => vals.includes(c.noCuenta)));
     // Cuenta y documento son mutuamente excluyentes en el desktop.
-    setTipoDocumento(undefined);
-    setModalCuentaAbierto(false);
+    if (vals.length > 0) setTipoDocumento(undefined);
   };
 
   const limpiarCuenta = () => {
-    setNoCuenta(undefined);
-    setNomCuenta('');
+    setCuentasSeleccionadas([]);
   };
 
   const handleTipoDocumentoChange = (val: string | undefined) => {
     setTipoDocumento(val);
     if (val) {
-      // Al elegir documento se limpia la cuenta.
-      setNoCuenta(undefined);
-      setNomCuenta('');
+      // Al elegir documento se limpian las cuentas.
+      setCuentasSeleccionadas([]);
     }
   };
 
@@ -331,7 +469,97 @@ const AsientosInventario: React.FC = () => {
     },
   ];
 
+  const columnasResumen: ColumnsType<FilaResumenTabla> = [
+    {
+      title: 'Cuenta',
+      key: 'cuenta',
+      render: (_v, r) => {
+        if (r.tipo === 'total') return <Text strong>Total General</Text>;
+        return <Text>{r.noCuenta} - {r.nombre}</Text>;
+      },
+    },
+    {
+      title: 'Débito',
+      key: 'debitos',
+      align: 'right',
+      render: (_v, r) => <Text strong={r.tipo === 'total'}>{formatMonto(r.totales.debitos)}</Text>,
+    },
+    {
+      title: 'Crédito',
+      key: 'creditos',
+      align: 'right',
+      render: (_v, r) => <Text strong={r.tipo === 'total'}>{formatMonto(r.totales.creditos)}</Text>,
+    },
+    {
+      title: 'Balance',
+      key: 'balance',
+      align: 'right',
+      render: (_v, r) => <Text strong={r.tipo === 'total'}>{formatMonto(r.totales.balance)}</Text>,
+    },
+    {
+      title: 'Auxiliar',
+      key: 'montoAuxiliar',
+      align: 'right',
+      render: (_v, r) => <Text strong={r.tipo === 'total'}>{formatMonto(r.totales.montoAuxiliar)}</Text>,
+    },
+    {
+      title: 'Diferencia',
+      key: 'diferencia',
+      align: 'right',
+      render: (_v, r) => <Text strong>{formatMonto(r.totales.diferencia)}</Text>,
+    },
+  ];
+
   /* ──── Render ──── */
+
+  const emptyText = (
+    <Empty
+      description={
+        !consultado
+          ? 'Seleccione los filtros y presione Consultar para ver el reporte'
+          : 'No se encontraron datos para el filtro seleccionado'
+      }
+    />
+  );
+
+  const tablaDetallada = (
+    <Table<FilaReporte>
+      className="paces-border-top paces-list-table"
+      dataSource={filasReporte}
+      columns={columnas}
+      rowKey="key"
+      size="small"
+      pagination={false}
+      scroll={{ x: 1000, y: 600 }}
+      onRow={(r) => {
+        if (r.tipo === 'grupo') {
+          return { style: { background: '#f0f5ff', fontWeight: 600 } };
+        }
+        if (r.tipo === 'subtotal') {
+          return { style: { background: '#fafafa', fontWeight: 600 } };
+        }
+        if (r.tipo === 'total') {
+          return { style: { background: '#e6f4ff', fontWeight: 700 } };
+        }
+        return {};
+      }}
+      locale={{ emptyText }}
+    />
+  );
+
+  const tablaResumida = (
+    <Table<FilaResumenTabla>
+      className="paces-border-top paces-list-table"
+      dataSource={filasResumen}
+      columns={columnasResumen}
+      rowKey="key"
+      size="small"
+      pagination={false}
+      scroll={{ x: 1000, y: 600 }}
+      onRow={(r) => (r.tipo === 'total' ? { style: { background: '#e6f4ff', fontWeight: 700 } } : {})}
+      locale={{ emptyText }}
+    />
+  );
 
   return (
     <>
@@ -358,16 +586,22 @@ const AsientosInventario: React.FC = () => {
               <div style={{ marginBottom: 4 }}>
                 <Text type="secondary" style={{ fontSize: 12 }}>Cuenta Contable</Text>
               </div>
-              <Space.Compact style={{ width: '100%' }}>
-                <Input
-                  placeholder="Buscar cuenta..."
-                  value={nomCuenta}
-                  readOnly
-                  style={{ width: '100%' }}
-                />
-                <Button icon={<SearchOutlined />} onClick={() => setModalCuentaAbierto(true)} />
-                {noCuenta ? <Button icon={<CloseOutlined />} onClick={limpiarCuenta} /> : null}
-              </Space.Compact>
+              <Select
+                mode="multiple"
+                allowClear
+                showSearch
+                placeholder="Buscar cuenta..."
+                value={cuentasSeleccionadas.map((c) => c.noCuenta)}
+                onChange={handleCuentasChange}
+                options={cuentasDisponibles.map((c) => ({
+                  value: c.noCuenta,
+                  label: `${c.noCuenta} - ${c.nombre}`,
+                }))}
+                style={{ width: '100%' }}
+                filterOption={(input, option) =>
+                  (option?.label as string ?? '').toLowerCase().includes(input.toLowerCase())
+                }
+              />
             </Col>
 
             <Col xs={24} sm={12} md={6}>
@@ -406,14 +640,24 @@ const AsientosInventario: React.FC = () => {
 
           <Row style={{ marginTop: 16 }}>
             <Col>
-              <Button
-                type="primary"
-                icon={<TableOutlined />}
-                onClick={handleConsultar}
-                loading={consultando}
-              >
-                Consultar
-              </Button>
+              <Space>
+                <Button
+                  type="primary"
+                  icon={<TableOutlined />}
+                  onClick={handleConsultar}
+                  loading={consultando}
+                >
+                  Consultar
+                </Button>
+                <Button
+                  icon={<PrinterOutlined />}
+                  onClick={handleImprimir}
+                  loading={imprimiendo}
+                  disabled={consultando || items.length === 0}
+                >
+                  Imprimir PDF
+                </Button>
+              </Space>
             </Col>
           </Row>
         </div>
@@ -426,48 +670,19 @@ const AsientosInventario: React.FC = () => {
           style={{ borderRadius: 8, overflow: 'hidden' }}
           styles={{ body: { padding: 0 } }}
         >
-          <Table<FilaReporte>
-            className="paces-border-top paces-list-table"
-            dataSource={filasReporte}
-            columns={columnas}
-            rowKey="key"
-            size="small"
-            pagination={false}
-            scroll={{ x: 1000, y: 600 }}
-            onRow={(r) => {
-              if (r.tipo === 'grupo') {
-                return { style: { background: '#f0f5ff', fontWeight: 600 } };
-              }
-              if (r.tipo === 'subtotal') {
-                return { style: { background: '#fafafa', fontWeight: 600 } };
-              }
-              if (r.tipo === 'total') {
-                return { style: { background: '#e6f4ff', fontWeight: 700 } };
-              }
-              return {};
-            }}
-            locale={{
-              emptyText: (
-                <Empty
-                  description={
-                    !consultado
-                      ? 'Seleccione los filtros y presione Consultar para ver el reporte'
-                      : 'No se encontraron datos para el filtro seleccionado'
-                  }
-                />
-              ),
-            }}
-          />
+          {cuentasSeleccionadas.length > 1 ? (
+            <Tabs
+              defaultActiveKey="detallado"
+              items={[
+                { key: 'resumido', label: 'Resumido', children: tablaResumida },
+                { key: 'detallado', label: 'Detallado', children: tablaDetallada },
+              ]}
+            />
+          ) : (
+            tablaDetallada
+          )}
         </Card>
       </Spin>
-
-      {/* ──── Modal búsqueda cuenta contable (modo simple) ──── */}
-      <BuscarCuentaContableModal
-        open={modalCuentaAbierto}
-        onClose={() => setModalCuentaAbierto(false)}
-        onSelect={seleccionarCuenta}
-        sucursal={sucursalActiva}
-      />
     </>
   );
 };

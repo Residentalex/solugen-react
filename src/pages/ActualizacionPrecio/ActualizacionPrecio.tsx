@@ -9,7 +9,7 @@ import FechaColumnCell from '../../components/FechaColumnCell';
 import { useAuthStore } from '../../stores/authStore';
 import { actualizacionPrecioApi } from '../../api/actualizacionPrecioApi';
 import type { ActualizacionPrecioDTO } from '../../types/actualizacionPrecio';
-import PermissionGate from '../../components/PermissionGate';
+import ToolbarAcciones from '../../components/ToolbarAcciones';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { Text } = Typography;
@@ -318,15 +318,36 @@ const ActualizacionPrecio: React.FC = () => {
               placeholder={["Desde", "Hasta"]}
             />
             <div style={{ flex: 1 }} />
-            <PermissionGate accion="CREAR">
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/FActPrecio/nuevo')}>
-                Nuevo
-              </Button>
-            </PermissionGate>
-            <PermissionGate accion="EXPORTAR">
-              <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
-            </PermissionGate>
-            <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
+            <ToolbarAcciones acciones={[
+              {
+                key: 'nuevo',
+                label: 'Nuevo',
+                icon: <PlusOutlined />,
+                tipo: 'primary',
+                prioridad: 100,
+                onClick: () => navigate('/FActPrecio/nuevo'),
+                permiso: { accion: 'CREAR' },
+              },
+              {
+                key: 'recargar',
+                label: 'Recargar',
+                icon: <ReloadOutlined />,
+                soloIcono: true,
+                tooltip: 'Recargar',
+                onClick: handleRefresh,
+                prioridad: 90,
+              },
+              {
+                key: 'excel',
+                label: 'Exportar a Excel',
+                icon: <FileExcelOutlined />,
+                soloIcono: true,
+                tooltip: 'Exportar a Excel',
+                onClick: handleExportarExcel,
+                permiso: { accion: 'EXPORTAR' },
+                prioridad: 50,
+              },
+            ]} />
           </div>
         </div>
         <Table<ActualizacionPrecioDTO>

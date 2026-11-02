@@ -1,9 +1,10 @@
 import React from 'react';
-import { Input, Button, Tooltip } from 'antd';
+import { Input } from 'antd';
 import { SearchOutlined, ReloadOutlined, PlusOutlined, EditOutlined, CopyOutlined, PrinterOutlined, FileExcelOutlined } from '@ant-design/icons';
 import FiltrosDocumento from './FiltrosDocumento/FiltrosDocumento';
 import PageSizeSelect from './PageSizeSelect';
-import PermissionGate from './PermissionGate';
+import ToolbarAcciones from './ToolbarAcciones';
+import type { ToolbarAccion } from './ToolbarAcciones';
 
 const { Search } = Input;
 
@@ -41,6 +42,8 @@ interface DocumentListadoToolbarProps {
   ocultarSearch?: boolean;
   onRefresh: () => void;
 
+  accionesItems?: ToolbarAccion[];
+
   extraLeft?: React.ReactNode;
   extraRight?: React.ReactNode;
   extraToolbar?: React.ReactNode;
@@ -73,10 +76,85 @@ const DocumentListadoToolbar: React.FC<DocumentListadoToolbarProps> = ({
   onExportarExcel,
   ocultarSearch,
   onRefresh,
+  accionesItems,
   extraLeft,
   extraRight,
   extraToolbar,
 }) => {
+  const accionesToolbar: ToolbarAccion[] = [
+    ...(showCrear && onCrear
+      ? [{
+          key: 'nuevo',
+          label: 'Nuevo',
+          icon: <PlusOutlined />,
+          tipo: 'primary' as const,
+          onClick: onCrear,
+          permiso: { accion: 'CREAR' },
+          prioridad: 100,
+        }]
+      : []),
+    {
+      key: 'recargar',
+      label: 'Actualizar',
+      icon: <ReloadOutlined />,
+      soloIcono: true,
+      tooltip: 'Actualizar',
+      onClick: onRefresh,
+      prioridad: 90,
+    },
+    ...(showEditar && onEditar
+      ? [{
+          key: 'editar',
+          label: 'Editar',
+          icon: <EditOutlined />,
+          onClick: onEditar,
+          permiso: { accion: 'EDITAR' },
+          prioridad: 80,
+          disabled: editarDisabled,
+        }]
+      : []),
+    ...(showClonar && onClonar
+      ? [{
+          key: 'clonar',
+          label: 'Clonar',
+          icon: <CopyOutlined />,
+          soloIcono: true,
+          tooltip: 'Clonar',
+          onClick: onClonar,
+          permiso: { accion: 'CLONAR' },
+          prioridad: 70,
+          disabled: clonarDisabled,
+        }]
+      : []),
+    ...(showImprimir && onImprimir
+      ? [{
+          key: 'imprimir',
+          label: 'Imprimir',
+          icon: <PrinterOutlined />,
+          soloIcono: true,
+          tooltip: 'Imprimir',
+          onClick: onImprimir,
+          permiso: { accion: 'IMPRIMIR' },
+          prioridad: 60,
+          disabled: imprimirDisabled,
+        }]
+      : []),
+    ...(showExportarExcel && onExportarExcel
+      ? [{
+          key: 'exportar',
+          label: 'Exportar a Excel',
+          icon: <FileExcelOutlined />,
+          soloIcono: true,
+          tooltip: 'Exportar a Excel',
+          onClick: onExportarExcel,
+          permiso: { accion: 'EXPORTAR' },
+          prioridad: 50,
+          disabled: exportarExcelDisabled,
+        }]
+      : []),
+    ...(accionesItems ?? []).map((a) => ({ ...a, prioridad: a.prioridad ?? 50 })),
+  ];
+
   return (
     <div style={{
       display: 'flex',
@@ -111,44 +189,7 @@ const DocumentListadoToolbar: React.FC<DocumentListadoToolbarProps> = ({
       <PageSizeSelect value={pageSize} onChange={onPageSizeChange} />
       {extraToolbar}
       <div style={{ flex: 1 }} />
-      {showCrear && onCrear && (
-        <PermissionGate accion="CREAR">
-          <Button type="primary" icon={<PlusOutlined />} onClick={onCrear}>
-            Nuevo
-          </Button>
-        </PermissionGate>
-      )}
-      {showEditar && onEditar && (
-        <PermissionGate accion="EDITAR">
-          <Button icon={<EditOutlined />} disabled={editarDisabled} onClick={onEditar}>
-            Editar
-          </Button>
-        </PermissionGate>
-      )}
-      {showClonar && onClonar && (
-        <PermissionGate accion="CLONAR">
-          <Tooltip title="Clonar">
-            <Button icon={<CopyOutlined />} aria-label="Clonar" disabled={clonarDisabled} onClick={onClonar} />
-          </Tooltip>
-        </PermissionGate>
-      )}
-      {showImprimir && onImprimir && (
-        <PermissionGate accion="IMPRIMIR">
-          <Tooltip title="Imprimir">
-            <Button icon={<PrinterOutlined />} aria-label="Imprimir" onClick={onImprimir} disabled={imprimirDisabled} />
-          </Tooltip>
-        </PermissionGate>
-      )}
-      {showExportarExcel && onExportarExcel && (
-        <PermissionGate accion="EXPORTAR">
-          <Tooltip title="Exportar a Excel">
-            <Button icon={<FileExcelOutlined />} aria-label="Exportar a Excel" onClick={onExportarExcel} disabled={exportarExcelDisabled} />
-          </Tooltip>
-        </PermissionGate>
-      )}
-      <Tooltip title="Actualizar">
-        <Button icon={<ReloadOutlined />} aria-label="Actualizar" onClick={onRefresh} />
-      </Tooltip>
+      <ToolbarAcciones acciones={accionesToolbar} />
       {extraRight}
     </div>
   );

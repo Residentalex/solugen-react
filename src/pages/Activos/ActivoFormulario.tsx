@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Button,
   Card,
   Col,
   DatePicker,
@@ -20,7 +19,6 @@ import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import DetalleCatalogoLayout from '../../components/DetalleCatalogoLayout';
-import PermissionGate from '../../components/PermissionGate';
 import { activoApi } from '../../api/activoApi';
 import type { ActivoDTO, ActivoCatalogosDTO, CrearActivoRequest } from '../../types/activo';
 import { crearFormatterMoneda, crearParserMoneda, toTitleCase } from '../../utils/formats';
@@ -212,15 +210,18 @@ const ActivoFormulario: React.FC = () => {
       onGuardar={handleGuardar}
       guardando={guardando}
       onVolver={handleVolver}
-      extraActions={
-        modo === 'editar' && data && !data.retirado ? (
-          <PermissionGate accion="ANULAR">
-            <Button danger icon={<StopOutlined />} onClick={handleRetirar} disabled={guardando}>
-              Retirar
-            </Button>
-          </PermissionGate>
-        ) : null
-      }
+      extraAcciones={[
+        {
+          key: 'retirar',
+          label: 'Retirar',
+          icon: <StopOutlined />,
+          tipo: 'danger',
+          onClick: handleRetirar,
+          permiso: { accion: 'ANULAR' },
+          visible: modo === 'editar' && !!data && !data.retirado,
+          disabled: guardando,
+        },
+      ]}
     >
       <Form form={form} layout="vertical" size="small" disabled={guardando}>
         <Card title="Datos Generales" className="paces-card" style={{ marginBottom: 16 }}>

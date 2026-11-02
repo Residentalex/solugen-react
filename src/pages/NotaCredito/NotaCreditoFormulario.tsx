@@ -636,7 +636,7 @@ const [asientos, setAsientos] = useState<AsientoContableDTO[]>([]);
 
     // Asegurar entidad con tipoEntidad
     const tipoEntidadStr = tipoEntidad;
-    const entidadBase = base.entidad || entidadSel || { nombre: '', codigo: '', identificacion: '' };
+    const entidadBase = entidadSel || base.entidad || { nombre: '', codigo: '', identificacion: '' };
     const entidad = {
       ...entidadBase,
       cuentaContable: entidadBase.cuentaContable,

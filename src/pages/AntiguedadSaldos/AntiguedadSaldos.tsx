@@ -1,12 +1,11 @@
 ﻿import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   Card, Table, Input, Select, Button, Typography, message, Spin, DatePicker, Checkbox,
-  Modal, Space, Row, Col, Empty, Tabs, Dropdown, Tooltip,
+  Modal, Space, Row, Col, Empty, Tabs,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
   SearchOutlined, ReloadOutlined, PrinterOutlined, DownloadOutlined, CloseOutlined, EyeOutlined,
-  MoreOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useSearchParams } from 'react-router-dom';
@@ -17,9 +16,13 @@ import { antiguedadSaldosApi } from '../../api/antiguedadSaldosApi';
 import { conceptosApi } from '../../api/conceptosApi';
 import { proveedorApi } from '../../api/proveedorApi';
 import { clienteApi } from '../../api/clienteApi';
+import { facturaClienteApi } from '../../api/facturaClienteApi';
+import { facturaPOSApi } from '../../api/facturaPOSApi';
+import CobrosMinimal from '../../components/CobrosCard/CobrosMinimal';
+import type { CobroDTO } from '../../types/facturaPOS';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { toTitleCase, formatCurrency } from '../../utils/formats';
-import PermissionGate from '../../components/PermissionGate';
+import ToolbarAcciones from '../../components/ToolbarAcciones';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import type { TransaccionBalanceDTO, ResumenAgingDTO, CategoriaEntidadDTO } from '../../types/antiguedadSaldos';
 import type { SuplidorDTO, CompaniaDTO } from '../../types/entradaAlmacen';
@@ -57,6 +60,8 @@ interface AgingValues {
 }
 
 const FILAS_POR_PAGINA = 25;
+
+const TIPOS_CON_COBROS = ['FAC', 'PV', 'PVC'];
 
 /* ───── Componente principal ───── */
 
@@ -122,6 +127,8 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
   const [modalRelacionadosAbierto, setModalRelacionadosAbierto] = useState(false);
   const [documentosRelacionados, setDocumentosRelacionados] = useState<any[]>([]);
   const [documentoActual, setDocumentoActual] = useState<TransaccionBalanceDTO | null>(null);
+  const [cobrosOriginal, setCobrosOriginal] = useState<CobroDTO | undefined>(undefined);
+  const [cobrosLoading, setCobrosLoading] = useState(false);
 
   const entidadSearchRef = useRef<any>(null);
   const categoriaSearchRef = useRef<any>(null);
@@ -227,6 +234,26 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     generarReporte();
   };
 
+  const cargarCobrosOriginal = async (record: TransaccionBalanceDTO) => {
+    const tipo = String(record.tipoDocumento || '').toUpperCase();
+    if (!TIPOS_CON_COBROS.includes(tipo)) {
+      setCobrosOriginal(undefined);
+      return;
+    }
+    setCobrosLoading(true);
+    try {
+      const cobros = tipo === 'FAC'
+        ? await facturaClienteApi.obtenerCobros(sucursalActiva, record.id)
+        : await facturaPOSApi.obtenerCobros(sucursalActiva, record.id);
+      setCobrosOriginal(cobros?.[0]);
+    } catch (err: any) {
+      setCobrosOriginal(undefined);
+      message.error(err?.response?.data?.errorMessage || 'Error al cargar los cobros del documento');
+    } finally {
+      setCobrosLoading(false);
+    }
+  };
+
   const verDocumentosRelacionados = (record: TransaccionBalanceDTO) => {
     setDocumentoActual(record);
     setModalRelacionadosAbierto(true);
@@ -235,6 +262,8 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
         .slice()
         .sort((a: any, b: any) => (a.fecha || '').localeCompare(b.fecha || ''))
     );
+    setCobrosOriginal(undefined);
+    void cargarCobrosOriginal(record);
   };
 
   const handlePrint = async () => {
@@ -625,7 +654,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       title: 'Balance',
       dataIndex: 'total',
       key: 'total',
-      width: 140,
+      width: 170,
       align: 'right',
       render: (val: number) => <Text strong className="paces-text-total">{formatCurrency(val || 0)}</Text>,
     },
@@ -633,7 +662,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       title: '0-30 días',
       dataIndex: 'monto0_30',
       key: 'monto0_30',
-      width: 120,
+      width: 150,
       align: 'right',
       render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
@@ -641,7 +670,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       title: '31-60 días',
       dataIndex: 'monto31_60',
       key: 'monto31_60',
-      width: 120,
+      width: 150,
       align: 'right',
       render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
@@ -649,7 +678,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       title: '61-90 días',
       dataIndex: 'monto61_90',
       key: 'monto61_90',
-      width: 120,
+      width: 150,
       align: 'right',
       render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
@@ -657,7 +686,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       title: '91-120 días',
       dataIndex: 'monto91_120',
       key: 'monto91_120',
-      width: 120,
+      width: 150,
       align: 'right',
       render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
@@ -665,7 +694,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       title: 'Más 120 días',
       dataIndex: 'montoMas120',
       key: 'montoMas120',
-      width: 120,
+      width: 150,
       align: 'right',
       render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
@@ -718,7 +747,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       title: 'Balance',
       dataIndex: 'total',
       key: 'total',
-      width: 140,
+      width: 170,
       align: 'right',
       render: (val: number) => <Text strong className="paces-text-total">{formatCurrency(val ?? 0)}</Text>,
     },
@@ -726,7 +755,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       title: '0-30 días',
       dataIndex: 'monto0_30',
       key: 'monto0_30',
-      width: 120,
+      width: 150,
       align: 'right',
       render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
@@ -734,7 +763,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       title: '31-60 días',
       dataIndex: 'monto31_60',
       key: 'monto31_60',
-      width: 120,
+      width: 150,
       align: 'right',
       render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
@@ -742,7 +771,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       title: '61-90 días',
       dataIndex: 'monto61_90',
       key: 'monto61_90',
-      width: 120,
+      width: 150,
       align: 'right',
       render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
@@ -750,7 +779,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       title: '91-120 días',
       dataIndex: 'monto91_120',
       key: 'monto91_120',
-      width: 120,
+      width: 150,
       align: 'right',
       render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
@@ -758,7 +787,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       title: 'Más 120 días',
       dataIndex: 'montoMas120',
       key: 'montoMas120',
-      width: 120,
+      width: 150,
       align: 'right',
       render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
@@ -873,7 +902,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
               <Space.Compact style={{ width: '100%' }}>
                 <Input
                   placeholder={`Buscar ${entidadLabel.toLowerCase()}...`}
-                  value={nomEntidad}
+                  value={toTitleCase(nomEntidad)}
                   readOnly
                   style={{ width: '100%' }}
                 />
@@ -976,55 +1005,53 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
             style={{ borderRadius: 8, overflow: 'hidden', marginBottom: 16 }}
             styles={{ body: { padding: 0 } }}
           >
-            <div style={{ padding: '16px 24px' }}>
+            <div style={{ padding: '12px 16px' }}>
               <Row gutter={[16, 12]} align="middle">
                 <Col xs={24} sm={12} md={4}>
-                  <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 4 }}>
                     Total
                   </div>
-                  <Text strong className="paces-text-total" style={{ fontSize: 24 }}>
+                  <Text strong className="paces-text-total" style={{ fontSize: 17 }}>
                     {formatCurrency(summaryTotals.total)}
                   </Text>
                 </Col>
                 <Col xs={24} sm={12} md={4}>
-                  <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 4 }}>
                     0-30 días
                   </div>
-                  <Text strong style={{ fontSize: 24, color: '#52c41a' }}>
+                  <Text strong style={{ fontSize: 17, color: '#52c41a' }}>
                     {formatCurrency(summaryTotals.m0_30)}
                   </Text>
                 </Col>
                 <Col xs={24} sm={12} md={4}>
-                  <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 4 }}>
                     31-60 días
                   </div>
-                  <Text strong style={{ fontSize: 24, color: '#1890ff' }}>
+                  <Text strong style={{ fontSize: 17, color: '#1890ff' }}>
                     {formatCurrency(summaryTotals.m31_60)}
                   </Text>
                 </Col>
-              </Row>
-              <Row gutter={[16, 12]} align="middle" style={{ marginTop: 8 }}>
                 <Col xs={24} sm={12} md={4}>
-                  <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 4 }}>
                     61-90 días
                   </div>
-                  <Text strong style={{ fontSize: 24, color: '#1890ff' }}>
+                  <Text strong style={{ fontSize: 17, color: '#1890ff' }}>
                     {formatCurrency(summaryTotals.m61_90)}
                   </Text>
                 </Col>
                 <Col xs={24} sm={12} md={4}>
-                  <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 4 }}>
                     91-120 días
                   </div>
-                  <Text strong style={{ fontSize: 24, color: '#faad14' }}>
+                  <Text strong style={{ fontSize: 17, color: '#faad14' }}>
                     {formatCurrency(summaryTotals.m91_120)}
                   </Text>
                 </Col>
                 <Col xs={24} sm={12} md={4}>
-                  <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
+                  <div style={{ fontSize: 11, color: '#666', marginBottom: 4 }}>
                     Más 120 días
                   </div>
-                  <Text strong style={{ fontSize: 24, color: '#f5222d' }}>
+                  <Text strong style={{ fontSize: 17, color: '#f5222d' }}>
                     {formatCurrency(summaryTotals.mMas120)}
                   </Text>
                 </Col>
@@ -1046,11 +1073,11 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
                     {nomEntidad || 'Todas las entidades'}
                   </Text>
                   <div style={{ fontSize: 12, color: '#666' }}>
-                    {nomEntidad ? nomEntidad : `${resumenData.length} ${entidadLabel}s registrados`}
+                    {resumenData.length} ${entidadLabel}s registrados
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
+                  <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
                     Saldo total
                   </Text>
                   <Text strong className="paces-text-total" style={{ fontSize: 20 }}>
@@ -1089,22 +1116,38 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
                   ]}
                 />
                 <div style={{ flex: 1 }} />
-                <Tooltip title="Imprimir PDF">
-                  <Button icon={<PrinterOutlined />} onClick={handlePrint} loading={imprimiendo} disabled={procesando} />
-                </Tooltip>
-                <PermissionGate accion="EXPORTAR">
-                  <Tooltip title="Exportar a Excel">
-                    <Button icon={<DownloadOutlined />} onClick={exportarExcel} disabled={procesando} />
-                  </Tooltip>
-                </PermissionGate>
-                <Dropdown
-                  menu={{ items: [
-                    { key: 'refresh', label: 'Actualizar', icon: <ReloadOutlined />, onClick: handleRefresh, disabled: procesando },
-                  ] }}
-                  trigger={['click']}
-                >
-                  <Button icon={<MoreOutlined />} title="Más acciones" disabled={procesando} />
-                </Dropdown>
+                <ToolbarAcciones acciones={[
+                  {
+                    key: 'actualizar',
+                    label: 'Actualizar',
+                    icon: <ReloadOutlined />,
+                    onClick: handleRefresh,
+                    disabled: procesando,
+                    prioridad: 90,
+                  },
+                  {
+                    key: 'imprimir',
+                    label: 'Imprimir PDF',
+                    icon: <PrinterOutlined />,
+                    soloIcono: true,
+                    tooltip: 'Imprimir PDF',
+                    onClick: handlePrint,
+                    loading: imprimiendo,
+                    disabled: procesando,
+                    prioridad: 50,
+                  },
+                  {
+                    key: 'excel',
+                    label: 'Exportar a Excel',
+                    icon: <DownloadOutlined />,
+                    soloIcono: true,
+                    tooltip: 'Exportar a Excel',
+                    onClick: exportarExcel,
+                    disabled: procesando,
+                    permiso: { accion: 'EXPORTAR' },
+                    prioridad: 50,
+                  },
+                ]} />
               </div>
             </div>
 
@@ -1145,7 +1188,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
           open={modalEntidadAbierto}
           onCancel={() => setModalEntidadAbierto(false)}
           footer={null}
-          width={500}
+          width={800}
           destroyOnHidden
           styles={{ body: { padding: '12px 16px' } }}
         >
@@ -1180,7 +1223,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
           open={modalEntidadAbierto}
           onCancel={() => setModalEntidadAbierto(false)}
           footer={null}
-          width={500}
+          width={800}
           destroyOnHidden
           styles={{ body: { padding: '12px 16px' } }}
         >
@@ -1345,6 +1388,9 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
               </div>
             </div>
           </div>
+        )}
+        {documentoActual && TIPOS_CON_COBROS.includes(String(documentoActual.tipoDocumento || '').toUpperCase()) && (
+          <CobrosMinimal cobrosPOS={cobrosOriginal} loading={cobrosLoading} />
         )}
         <Table
           columns={[

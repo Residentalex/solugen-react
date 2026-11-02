@@ -13,6 +13,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { transaccionApi } from '../../api/transaccionApi';
+import { transaccionBancariaApi } from '../../api/transaccionBancariaApi';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import type { TransaccionDTO, TransaccionAsientoDTO } from '../../types/transaccion';
 import { ErrorDetalle } from '../../components';
@@ -196,7 +197,7 @@ const AsientoContableDetalle: React.FC = () => {
   const estadoInfo = ESTADO_DOCUMENTO_MAP[toEstadoNum(documentoActivo.estado)] || { label: 'Desconocido', color: 'default' };
   const esCerrado = toPeriodoNum(documentoActivo.periodo) === 6;
   const permisoModificarAdmin = usuario?.permisosEspeciales?.some(
-    (p: any) => p.codigo === 'pe_modificar_admin' && p.valor === true
+    (p: any) => p.codigo?.toUpperCase() === 'PE_MODIFICAR_ADMIN' && p.valor === true
   ) ?? false;
   const esReverso = data.reversoID != null && data.reversoID > 0;
 
@@ -240,7 +241,11 @@ const AsientoContableDetalle: React.FC = () => {
     setSaving(true);
     const documento = `${data.documento?.codigo || ''}-${data.noDocumento || ''}`;
     try {
-      await transaccionApi.desaplicar(sucursalActiva, documento);
+      if (data.ctaBancaria && data.ctaBancaria.trim() !== '') {
+        await transaccionBancariaApi.desaplicarDocBancario(sucursalActiva, documento, data.ctaBancaria);
+      } else {
+        await transaccionApi.desaplicar(sucursalActiva, documento);
+      }
       message.success('Documento desaplicado correctamente');
       setModalDesaplicarOpen(false);
       await recargar();

@@ -50,6 +50,29 @@ export interface ExportToExcelOptions {
   mergeCols?: number;
   /** Anchos de columna opcionales */
   columnWidths?: ({ wch: number } | undefined)[];
+  /** Indices (0-based) de columnas numericas que deben mostrarse con formato N2 */
+  numericColumns?: number[];
+  /** Formato de celda para las columnas numericas (default '#,##0.00') */
+  numericFormat?: string;
+}
+
+const FORMATO_N2 = '#,##0.00';
+
+function aplicarFormatoN2(
+  ws: XLSX.WorkSheet,
+  totalFilas: number,
+  totalHeaderRows: number,
+  numericColumns?: number[],
+  numericFormat: string = FORMATO_N2,
+): void {
+  if (!numericColumns || numericColumns.length === 0) return;
+  for (let r = totalHeaderRows + 1; r < totalFilas; r++) {
+    for (const c of numericColumns) {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      const cell = ws[addr];
+      if (cell && typeof cell.v === 'number') cell.z = numericFormat;
+    }
+  }
 }
 
 /* ───── Función principal de exportación ───── */
@@ -71,6 +94,8 @@ export function exportToExcel(options: ExportToExcelOptions): void {
     fileName,
     mergeCols = 3,
     columnWidths,
+    numericColumns,
+    numericFormat,
   } = options;
 
   // Construir el array de arrays completo
@@ -124,6 +149,9 @@ export function exportToExcel(options: ExportToExcelOptions): void {
     ws[addr].s = { font: { bold: true, sz: 11 } };
   }
 
+  // ── Formato numérico N2 ──
+  aplicarFormatoN2(ws, aoa.length, totalHeaderRows, numericColumns, numericFormat);
+
   // ── Agregar hoja y descargar ──
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
   const defaultFileName = `${sheetName.replace(/\s+/g, '_')}_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`;
@@ -143,6 +171,8 @@ export interface ExportToExcelSheetOptions {
   dataRows: any[][];
   /** Anchos de columna opcionales */
   columnWidths?: ({ wch: number } | undefined)[];
+  /** Indices (0-based) de columnas numericas que deben mostrarse con formato N2 */
+  numericColumns?: number[];
 }
 
 export interface ExportToExcelMultiSheetOptions {
@@ -171,7 +201,7 @@ export function exportToExcelMultiSheet(options: ExportToExcelMultiSheetOptions)
   const wb = XLSX.utils.book_new();
 
   for (const sheet of sheets) {
-    const { sheetName, extraHeaderRows = [], columnHeaders, dataRows, columnWidths } = sheet;
+    const { sheetName, extraHeaderRows = [], columnHeaders, dataRows, columnWidths, numericColumns } = sheet;
 
     const aoa: any[][] = [
       [companyName],
@@ -217,6 +247,9 @@ export function exportToExcelMultiSheet(options: ExportToExcelMultiSheetOptions)
       if (!ws[addr]) continue;
       ws[addr].s = { font: { bold: true, sz: 11 } };
     }
+
+    // ── Formato numérico N2 ──
+    aplicarFormatoN2(ws, aoa.length, totalHeaderRows, numericColumns);
 
     // ── Sanitizar nombre de hoja (Excel max 31 chars, sin caracteres especiales) ──
     const safeName = sheetName.replace(/[\\/\?*\[\]:]/g, '_').substring(0, 31);

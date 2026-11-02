@@ -10,7 +10,7 @@ import EntidadColumnCell from '../../components/EntidadColumnCell';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
 import FechaColumnCell from '../../components/FechaColumnCell';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
-import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../utils/estadoDocumento';
+import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO, toEstadoNum } from '../../utils/estadoDocumento';
 import type { TransaccionBancariaVistaDTO } from '../../types/transaccion';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 
@@ -121,7 +121,11 @@ const SolicitudPago: React.FC = () => {
       key: 'estado',
       width: 100,
       render: (estado: number, record: TransaccionBancariaVistaDTO) => (
-        <EstadoColumnCell estado={estado} periodo={record.periodo} />
+        <EstadoColumnCell
+          estado={estado}
+          periodo={record.periodo}
+          autorizado={Boolean(record.autorizado) && toEstadoNum(record.estado) !== 3}
+        />
       ),
     },
   ];

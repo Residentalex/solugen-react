@@ -372,9 +372,8 @@ const Empresa: React.FC = () => {
                           showSearch
                           optionFilterProp="children"
                           options={[
+                            { value: 'Electronica', label: 'e-CF (Electrónica)' },
                             { value: 'Normal', label: 'Normal' },
-                            { value: 'ConsumidorFinal', label: 'Consumidor Final' },
-                            { value: 'eCF', label: 'eCF (Factura Electronica)' },
                           ]}
                         />
                       </Form.Item>
@@ -383,6 +382,15 @@ const Empresa: React.FC = () => {
                       <Form.Item
                         name="orcEnUnidades"
                         label="ORC en unidades"
+                        valuePropName="checked"
+                      >
+                        <Switch />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={24} sm={12} lg={12}>
+                      <Form.Item
+                        name="actualizarSuplidorEnEntrada"
+                        label="Actualizar suplidor en entrada"
                         valuePropName="checked"
                       >
                         <Switch />
@@ -462,6 +470,9 @@ const Empresa: React.FC = () => {
                     </Descriptions.Item>
                     <Descriptions.Item label="ORC en unidades">
                       {data?.orcEnUnidades ? 'Sí' : 'No'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Actualizar suplidor en entrada">
+                      {data?.actualizarSuplidorEnEntrada ? 'Sí' : 'No'}
                     </Descriptions.Item>
                   </Descriptions>
                 </Card>

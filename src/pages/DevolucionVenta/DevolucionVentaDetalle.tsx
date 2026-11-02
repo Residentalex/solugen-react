@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Modal, Typography, Tooltip, Alert, App, DatePicker, Dropdown
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Modal, Typography, Tooltip, Alert, App, DatePicker
 } from 'antd';
 import type { MenuProps } from 'antd';
 import dayjs from 'dayjs';
@@ -26,7 +26,6 @@ import {
   HistoryOutlined,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
-import PermissionGate from '../../components/PermissionGate';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -64,6 +63,7 @@ const DETALLE_COLUMNS_CONFIG: ColumnConfig[] = [
   { key: 'articulo', label: 'Artículo', defaultVisible: true },
   { key: 'cantidad', label: 'Cantidad', defaultVisible: true },
   { key: 'precio', label: 'Precio', defaultVisible: true },
+  { key: 'costo', label: 'Costo', defaultVisible: false },
   { key: 'descuento', label: 'Descuento', defaultVisible: true },
   { key: 'subTotal', label: 'SubTotal', defaultVisible: false },
   { key: 'impuestos', label: 'Impuestos', defaultVisible: true },
@@ -465,6 +465,30 @@ const DevolucionVentaDetalle: React.FC = () => {
       },
     },
     {
+      title: 'Costo',
+      dataIndex: 'costo',
+      key: 'costo',
+      width: 110,
+      align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
+      render: (_: any, record: any) => {
+        const costoBase = Number(record.costo) || 0;
+        const pctDesc = Number(record.porcentajeDescuento) || 0;
+        const factor = Number(record.medida?.factor) || 1;
+        const costoConDescuento = costoBase - ((costoBase * pctDesc) / 100);
+        const costoUnitario = costoConDescuento / factor;
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <div>{formatNumber(costoBase)}</div>
+            <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999', marginTop: 'auto' }}>
+              {formatNumber(costoUnitario)} × {factor}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
       title: 'Descuento',
       key: 'descuento',
       width: 100,
@@ -546,6 +570,96 @@ const DevolucionVentaDetalle: React.FC = () => {
   const detalleColumnsFiltered = detalleColumns.filter(
     (col) => col.key === 'codigo' || visibleDetalleKeys.includes(col.key as string)
   );
+
+  // Columnas realmente renderizadas por la tabla: ademas del filtro por
+  // `visibleDetalleKeys` (detalleColumnsFiltered), antd oculta columnas con
+  // `responsive` segun el breakpoint activo. Replicamos esa regla para que el
+  // <tfoot> del summary cubra EXACTAMENTE las mismas columnas que thead/tbody
+  // y no introduzca columnas extra (causa raiz del ancho cortado).
+  const columnasVisiblesTabla = detalleColumnsFiltered.filter((col: any) => {
+    if (!col.responsive) return true;
+    return col.responsive.some((bp: string) => screens[bp as keyof typeof screens]);
+  });
+
+  // Genera la fila "Totales" del summary alineada 1:1 con columnasVisiblesTabla.
+  // Usa un contador incremental en lugar de indices hardcodeados para que el
+  // numero de columnas cubiertas por el tfoot sea SIEMPRE igual al de la tabla.
+  const renderSummaryTotales = () => {
+    const articuloVisible = columnasVisiblesTabla.some((c: any) => c.key === 'articulo');
+    const celdas: React.ReactNode[] = [];
+    let indice = 0;
+    columnasVisiblesTabla.forEach((col: any) => {
+      const key = col.key as string;
+      switch (key) {
+        case 'codigo': {
+          celdas.push(
+            <Table.Summary.Cell key={key} index={indice} colSpan={articuloVisible ? 2 : 1}>
+              <Text strong style={{ paddingLeft: 8 }}>Totales</Text>
+            </Table.Summary.Cell>
+          );
+          indice += articuloVisible ? 2 : 1;
+          break;
+        }
+        case 'articulo':
+          // Cubierta por el colSpan de `codigo`.
+          break;
+        case 'cantidad':
+          celdas.push(
+            <Table.Summary.Cell key={key} index={indice} align="right">
+              {formatNumber(totalesDetalles.cantidad)}
+            </Table.Summary.Cell>
+          );
+          indice += 1;
+          break;
+        case 'descuento':
+          celdas.push(
+            <Table.Summary.Cell key={key} index={indice} align="right">
+              {formatNumber(totalesDetalles.descuento)}
+            </Table.Summary.Cell>
+          );
+          indice += 1;
+          break;
+        case 'subTotal':
+          celdas.push(
+            <Table.Summary.Cell key={key} index={indice} align="right">
+              {formatNumber(totalesDetalles.subTotal)}
+            </Table.Summary.Cell>
+          );
+          indice += 1;
+          break;
+        case 'impuestos':
+          celdas.push(
+            <Table.Summary.Cell key={key} index={indice} align="right">
+              {formatNumber(totalesDetalles.impuestos)}
+            </Table.Summary.Cell>
+          );
+          indice += 1;
+          break;
+        case 'total':
+          celdas.push(
+            <Table.Summary.Cell key={key} index={indice} align="right">
+              <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(totalesDetalles.total)}</Text>
+            </Table.Summary.Cell>
+          );
+          indice += 1;
+          break;
+        default:
+          // precio, costo, factor, etc.: celda vacia para mantener la alineacion.
+          celdas.push(
+            <Table.Summary.Cell key={key} index={indice} />
+          );
+          indice += 1;
+          break;
+      }
+    });
+    return (
+      <Table.Summary fixed="bottom">
+        <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+          {celdas}
+        </Table.Summary.Row>
+      </Table.Summary>
+    );
+  };
 
   // asientoColumns reemplazado por AsientosContableTable compartido
 
@@ -777,27 +891,27 @@ const DevolucionVentaDetalle: React.FC = () => {
         onRevisado={handleRevisado}
         onDesaplicar={handleDesaplicar}
         onReversar={handleReversar}
-        extraButtons={
-          <>
-            <PermissionGate codigoPantalla="FDEV" accion="IMPRIMIR">
-              <Dropdown menu={{ items: printMenuItems, onClick: handlePrintMenuClick }} trigger={['click']}>
-                <Button icon={<PrinterOutlined />} loading={imprimiendo} />
-              </Dropdown>
-            </PermissionGate>
-            {(data?.transaccionesAsociadas?.length ?? 0) === 0 &&
-            (toEstadoNum(data.estado) === 1 || toEstadoNum(data.estado) === 2) && (
-              <PermissionGate permisoEspecial="pe_generar_ndcli">
-                <Button
-                  type="primary"
-                  icon={<FileTextOutlined />}
-                  onClick={handleGenerarND}
-                >
-                  Generar ND
-                </Button>
-              </PermissionGate>
-            )}
-          </>
-        }
+        extraAcciones={[
+          {
+            key: 'imprimir',
+            label: 'Imprimir',
+            icon: <PrinterOutlined />,
+            soloIcono: true,
+            tooltip: 'Imprimir',
+            loading: imprimiendo,
+            permiso: { codigoPantalla: 'FDEV', accion: 'IMPRIMIR' },
+            menu: { items: printMenuItems, onClick: handlePrintMenuClick },
+          },
+          ...((data?.transaccionesAsociadas?.length ?? 0) === 0 &&
+            (toEstadoNum(data.estado) === 1 || toEstadoNum(data.estado) === 2) ? [{
+            key: 'generar-nd',
+            label: 'Generar ND',
+            icon: <FileTextOutlined />,
+            tipo: 'primary' as const,
+            onClick: handleGenerarND,
+            permiso: { permisoEspecial: 'pe_generar_ndcli' },
+          }] : []),
+        ]}
       />
 
       {isLarge ? (
@@ -903,32 +1017,8 @@ const DevolucionVentaDetalle: React.FC = () => {
                           rowKey={(r: any, i?: number) => r.id || i}
                           size="small"
                           pagination={false}
-                          scroll={{ x: 1200 }}
-                          summary={() => (
-                            <Table.Summary fixed="bottom">
-                              <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
-                                <Table.Summary.Cell index={0} colSpan={2}>
-                                  <Text strong style={{ paddingLeft: 8 }}>Totales</Text>
-                                </Table.Summary.Cell>
-                                <Table.Summary.Cell index={2} align="right">
-                                  {formatNumber(totalesDetalles.cantidad)}
-                                </Table.Summary.Cell>
-                                <Table.Summary.Cell index={3} align="right" responsive={['md', 'lg', 'xl', 'xxl']}>
-                                  {formatNumber(totalesDetalles.subTotal)}
-                                </Table.Summary.Cell>
-                                <Table.Summary.Cell index={4} align="right" responsive={['lg', 'xl', 'xxl']}>
-                                  {formatNumber(totalesDetalles.descuento)}
-                                </Table.Summary.Cell>
-                                <Table.Summary.Cell index={5} align="right" responsive={['lg', 'xl', 'xxl']}>
-                                  {formatNumber(totalesDetalles.impuestos)}
-                                </Table.Summary.Cell>
-                                <Table.Summary.Cell index={6} align="right">
-                                  <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(totalesDetalles.total)}</Text>
-                                </Table.Summary.Cell>
-                                <Table.Summary.Cell index={7} />
-                              </Table.Summary.Row>
-                            </Table.Summary>
-                          )}
+                          scroll={{ x: 1100 }}
+                          summary={renderSummaryTotales}
                         />
                       </div>
                     </Spin>
@@ -1147,32 +1237,8 @@ const DevolucionVentaDetalle: React.FC = () => {
                         rowKey={(r: any, i?: number) => r.id || i}
                         size="small"
                         pagination={false}
-                        scroll={{ x: 1200 }}
-                        summary={() => (
-                          <Table.Summary fixed="bottom">
-                            <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
-                              <Table.Summary.Cell index={0} colSpan={2}>
-                                <Text strong style={{ paddingLeft: 8 }}>Totales</Text>
-                              </Table.Summary.Cell>
-                              <Table.Summary.Cell index={2} align="right">
-                                {formatNumber(totalesDetalles.cantidad)}
-                              </Table.Summary.Cell>
-                              <Table.Summary.Cell index={3} align="right" responsive={['md', 'lg', 'xl', 'xxl']}>
-                                {formatNumber(totalesDetalles.subTotal)}
-                              </Table.Summary.Cell>
-                              <Table.Summary.Cell index={4} align="right" responsive={['lg', 'xl', 'xxl']}>
-                                {formatNumber(totalesDetalles.descuento)}
-                              </Table.Summary.Cell>
-                              <Table.Summary.Cell index={5} align="right" responsive={['lg', 'xl', 'xxl']}>
-                                {formatNumber(totalesDetalles.impuestos)}
-                              </Table.Summary.Cell>
-                              <Table.Summary.Cell index={6} align="right">
-                                <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(totalesDetalles.total)}</Text>
-                              </Table.Summary.Cell>
-                              <Table.Summary.Cell index={7} />
-                            </Table.Summary.Row>
-                          </Table.Summary>
-                        )}
+                        scroll={{ x: 1100 }}
+                        summary={renderSummaryTotales}
                       />
                     </div>
                   </Spin>

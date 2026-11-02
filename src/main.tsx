@@ -8,6 +8,22 @@ import { useUIStore } from './stores/uiStore'
 import type { ThemeName } from './stores/uiStore'
 import { THEMES, getIsDarkFromTheme } from './themes'
 
+// El locale es_ES de antd no define los formatos de campo de los pickers, por lo que
+// caen al default ISO (YYYY-MM-DD). Se fijan aqui para que todo DatePicker/RangePicker
+// sin `format` explicito muestre dd/MM/yyyy (y con hora, dd/MM/yyyy HH:mm).
+// RangePicker lee la locale de Calendar (ver antd generateRangePicker), por eso se
+// aplica el mismo lang a DatePicker y Calendar.
+const langConFormatoFecha = {
+  ...esES.DatePicker.lang,
+  fieldDateFormat: 'DD/MM/YYYY',
+  fieldDateTimeFormat: 'DD/MM/YYYY HH:mm',
+}
+const localeApp = {
+  ...esES,
+  DatePicker: { ...esES.DatePicker, lang: langConFormatoFecha },
+  Calendar: { ...esES.Calendar, lang: langConFormatoFecha },
+}
+
 function getThemeConfig(themeName: ThemeName) {
   const t = THEMES[themeName];
   const isDark = t.isDark;
@@ -135,7 +151,7 @@ function AppWrapper() {
   }, [themeName]);
 
   return (
-    <ConfigProvider theme={getThemeConfig(themeName)} locale={esES}>
+    <ConfigProvider theme={getThemeConfig(themeName)} locale={localeApp}>
       <AntApp>
         <App />
       </AntApp>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Spin, Alert } from 'antd';
 import {
@@ -7,8 +7,10 @@ import {
   SaveOutlined,
   DeleteOutlined,
   StopOutlined,
+  CloseOutlined,
 } from '@ant-design/icons';
-import PermissionGate from './PermissionGate';
+import ToolbarAcciones from './ToolbarAcciones';
+import type { ToolbarAccion } from './ToolbarAcciones';
 import ErrorDetalle from './ErrorDetalle';
 
 interface DetalleCatalogoLayoutProps {
@@ -27,6 +29,7 @@ interface DetalleCatalogoLayoutProps {
   modo?: 'crear' | 'editar';
   onEditar?: () => void;
   onGuardar?: () => void;
+  onCancelar?: () => void;
   onEliminar?: () => void;
   onInactivar?: () => void;
 
@@ -35,7 +38,10 @@ interface DetalleCatalogoLayoutProps {
   bloqueado?: boolean;
 
   extraLeft?: React.ReactNode;
+  /** Slot de información a la derecha (Tag, texto). NO usar para botones de acción:
+   *  esos van en `extraAcciones` para respetar el límite de 2 visibles. */
   extraActions?: React.ReactNode;
+  extraAcciones?: ToolbarAccion[];
 
   onVolver?: () => void;
 
@@ -58,6 +64,7 @@ const DetalleCatalogoLayout: React.FC<DetalleCatalogoLayoutProps> = ({
   modo = 'editar',
   onEditar,
   onGuardar,
+  onCancelar,
   onEliminar,
   onInactivar,
 
@@ -67,12 +74,87 @@ const DetalleCatalogoLayout: React.FC<DetalleCatalogoLayoutProps> = ({
 
   extraLeft,
   extraActions,
+  extraAcciones,
 
   onVolver,
 
   children,
 }) => {
   const navigate = useNavigate();
+
+  const acciones: ToolbarAccion[] = useMemo(() => [
+    // Guardar (primary)
+    ...(onGuardar
+      ? [{
+          key: 'guardar',
+          label: 'Guardar',
+          icon: <SaveOutlined />,
+          tipo: 'primary' as const,
+          loading: guardando,
+          onClick: onGuardar,
+          permiso: { accion: modo === 'crear' ? 'CREAR' : 'EDITAR' },
+          prioridad: 100,
+          disabled: bloqueado || guardando || eliminando,
+        }]
+      : []),
+
+    // Cancelar
+    ...(onCancelar
+      ? [{
+          key: 'cancelar',
+          label: 'Cancelar',
+          icon: <CloseOutlined />,
+          onClick: onCancelar,
+          prioridad: 90,
+          disabled: bloqueado || guardando || eliminando,
+        }]
+      : []),
+
+    // Editar (primary; solo en modo lectura, cuando no hay Guardar)
+    ...(onEditar
+      ? [{
+          key: 'editar',
+          label: 'Editar',
+          icon: <EditOutlined />,
+          tipo: 'primary' as const,
+          onClick: onEditar,
+          permiso: { accion: 'EDITAR' },
+          prioridad: 80,
+          disabled: bloqueado || guardando || eliminando,
+        }]
+      : []),
+
+    // Inactivar (destructiva)
+    ...(onInactivar
+      ? [{
+          key: 'inactivar',
+          label: 'Inactivar',
+          icon: <StopOutlined />,
+          tipo: 'danger' as const,
+          destructiva: true,
+          onClick: onInactivar,
+          permiso: { accion: 'EDITAR' },
+          prioridad: 60,
+        }]
+      : []),
+
+    // Eliminar (destructiva)
+    ...(onEliminar
+      ? [{
+          key: 'eliminar',
+          label: 'Eliminar',
+          icon: <DeleteOutlined />,
+          tipo: 'danger' as const,
+          destructiva: true,
+          loading: eliminando,
+          onClick: onEliminar,
+          permiso: { accion: 'ELIMINAR' },
+          prioridad: 50,
+          disabled: bloqueado || guardando || eliminando,
+        }]
+      : []),
+    ...(extraAcciones ?? []).map((a) => ({ ...a, prioridad: a.prioridad ?? 50 })),
+  ], [onGuardar, guardando, modo, bloqueado, eliminando, onCancelar, onEditar, onInactivar, onEliminar, extraAcciones]);
 
   // Estado LOADING inicial (sin datos previos)
   if (loading && !dataDisponible) {
@@ -135,45 +217,14 @@ const DetalleCatalogoLayout: React.FC<DetalleCatalogoLayoutProps> = ({
       )}
 
       {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8, flexWrap: 'wrap' }}>
         <Button icon={<ArrowLeftOutlined />} onClick={onVolver ?? (() => navigate(rutaVolver))} disabled={bloqueado || guardando || eliminando}>
           Volver
         </Button>
         {extraLeft}
         <div style={{ flex: 1 }} />
         {extraActions}
-
-        {onEditar && (
-          <PermissionGate accion="EDITAR">
-            <Button type="primary" icon={<EditOutlined />} onClick={onEditar} disabled={bloqueado || guardando || eliminando}>
-              Editar
-            </Button>
-          </PermissionGate>
-        )}
-
-        {onGuardar && (
-          <PermissionGate accion={modo === 'crear' ? 'CREAR' : 'EDITAR'}>
-            <Button type="primary" icon={<SaveOutlined />} loading={guardando} disabled={bloqueado || guardando || eliminando} onClick={onGuardar}>
-              Guardar
-            </Button>
-          </PermissionGate>
-        )}
-
-        {onEliminar && (
-          <PermissionGate accion="ELIMINAR">
-            <Button danger icon={<DeleteOutlined />} loading={eliminando} disabled={bloqueado || guardando || eliminando} onClick={onEliminar}>
-              Eliminar
-            </Button>
-          </PermissionGate>
-        )}
-
-        {onInactivar && (
-          <PermissionGate accion="EDITAR">
-            <Button icon={<StopOutlined />} onClick={onInactivar}>
-              Inactivar
-            </Button>
-          </PermissionGate>
-        )}
+        <ToolbarAcciones acciones={acciones} />
       </div>
 
       {/* Contenido */}

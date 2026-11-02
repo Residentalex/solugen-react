@@ -199,8 +199,8 @@ const AsientoContableFormulario: React.FC = () => {
         setSelectedSucursal(res.codigoSucursal || res.sucursal?.codigo || '');
         setSelectedCuenta(res.ctaBancaria || '');
         setDocumentosAsociados((res.transaccionesAsociadas || []).map((d: any) => ({
-          id: d.transaccionAsociadaID ?? d.id ?? Math.random(),
-          transaccionAsociadaID: d.transaccionAsociadaID ?? d.id,
+          id: d.transaccionAsociadaID || d.id || Math.random(),
+          transaccionAsociadaID: d.transaccionAsociadaID || 0,
           transaccionID: d.id,
           fecha: d.fecha ? dayjs(d.fecha).format('YYYY-MM-DD') : '',
           documento: d.documento || '',
@@ -288,8 +288,8 @@ const AsientoContableFormulario: React.FC = () => {
             setSelectedSucursal(res.codigoSucursal || res.sucursal?.codigo || '');
             setSelectedCuenta(res.ctaBancaria || '');
             setDocumentosAsociados((res.transaccionesAsociadas || []).map((d: any) => ({
-              id: d.transaccionAsociadaID ?? d.id ?? Math.random(),
-              transaccionAsociadaID: d.transaccionAsociadaID ?? d.id,
+              id: d.transaccionAsociadaID || d.id || Math.random(),
+              transaccionAsociadaID: d.transaccionAsociadaID || 0,
               transaccionID: d.id,
               fecha: d.fecha ? dayjs(d.fecha).format('YYYY-MM-DD') : '',
               documento: d.documento || '',
@@ -385,9 +385,8 @@ const AsientoContableFormulario: React.FC = () => {
     if (!values.fechaDocumento) return 'La fecha es requerida';
     if (!selectedConcepto) return 'El concepto es requerido';
     if (!selectedEntidad) return 'La entidad es requerida';
-    // Permiso gerencial: permite guardar sin asientos o sin cuadrar
+    // Permiso gerencial: permite guardar sin cuadrar
     if (!permisoModificarAdmin) {
-      if (asientos.length === 0) return 'Debe agregar al menos un asiento';
       if (!esCuadrado) return `Los asientos no cuadran. Diferencia: ${formatNumber(diferencia)}`;
 
       // Validar que todos los asientos tengan cuenta contable
@@ -461,18 +460,20 @@ const AsientoContableFormulario: React.FC = () => {
         total: d.total ?? Math.round(((d.cantidad || 0) * (d.precio || 0) - (d.descuento || 0)) * 100) / 100,
         referencia: d.referencia || '',
       })),
-      transaccionesAsociadas: documentosAsociados.map((d) => ({
-        id: d.transaccionID ?? (base as any).id ?? 0,
-        transaccionAsociadaID: d.transaccionAsociadaID ?? d.id,
-        monto: d.monto ?? 0,
-        montoOriginal: d.montoOriginal ?? 0,
-        descuento: d.descuento ?? 0,
-        retencion: d.retencion ?? 0,
-        nCF: d.nCF,
-        documento: d.documento,
-        pagado: d.pagado ?? 0,
-        saldoPendiente: pendienteEfectivo(d),
-      })),
+      transaccionesAsociadas: documentosAsociados
+        .filter((d) => !!d.transaccionAsociadaID)
+        .map((d) => ({
+          id: d.transaccionID ?? (base as any).id ?? 0,
+          transaccionAsociadaID: d.transaccionAsociadaID,
+          monto: d.monto ?? 0,
+          montoOriginal: d.montoOriginal ?? 0,
+          descuento: d.descuento ?? 0,
+          retencion: d.retencion ?? 0,
+          nCF: d.nCF,
+          documento: d.documento,
+          pagado: d.pagado ?? 0,
+          saldoPendiente: pendienteEfectivo(d),
+        })),
       logs: (base as any).logs || [],
       impuestosFactura: (base as any).impuestosFactura || [],
     };
@@ -599,40 +600,43 @@ const AsientoContableFormulario: React.FC = () => {
   // ===== Handlers de documentos asociados editables =====
   const handleMontoChange = (id: number, value: number | null) => {
     setDocumentosAsociados((prev) =>
-      prev.map((d) => (d.transaccionAsociadaID ?? d.id) === id ? { ...d, monto: Math.min(value ?? 0, pendienteEfectivo(d)) } : d)
+      prev.map((d) => d.id === id ? { ...d, monto: Math.min(value ?? 0, pendienteEfectivo(d)) } : d)
     );
   };
 
   const handleDescuentoChange = (id: number, value: number | null) => {
     setDocumentosAsociados((prev) =>
-      prev.map((d) => (d.transaccionAsociadaID ?? d.id) === id ? { ...d, descuento: value ?? 0 } : d)
+      prev.map((d) => d.id === id ? { ...d, descuento: value ?? 0 } : d)
     );
   };
 
   const handleRemoveDoc = (id: number) => {
     setDocumentosAsociados((prev) =>
-      prev.filter((d) => (d.transaccionAsociadaID ?? d.id) !== id)
+      prev.filter((d) => d.id !== id)
     );
   };
 
   const handleDocumentosSeleccionados = (docs: any[]) => {
     setDocumentosAsociados((prev) => {
-      const existingIds = new Set(prev.map((d) => d.transaccionAsociadaID ?? d.id));
-      const nuevos = docs.filter((d: any) => !existingIds.has(d.transaccionAsociadaID ?? d.id));
-      return [...prev, ...nuevos.map((d: any) => ({
-        id: d.transaccionAsociadaID ?? d.id,
-        transaccionAsociadaID: d.transaccionAsociadaID ?? d.id,
-        transaccionID: d.transaccionID,
-        fecha: d.fecha ? dayjs(d.fecha).format('YYYY-MM-DD') : '',
-        documento: d.documento || '',
-        nCF: d.ncf || d.nCF || '',
-        montoOriginal: d.montoOriginal || 0,
-        monto: d.monto ?? d.montoOriginal ?? 0,
-        descuento: 0,
-        retencion: d.retencion ?? 0,
-        pagado: d.pagado ?? d.acreditado ?? 0,
-        pendiente: pendienteEfectivo(d),
-      }))];
+      const existingIds = new Set(prev.map((d) => d.id));
+      const nuevos = docs.filter((d: any) => !existingIds.has(d.id ?? d.transaccionAsociadaID));
+      return [...prev, ...nuevos.map((d: any) => {
+        const docId = d.id ?? d.transaccionAsociadaID;
+        return {
+          id: docId,
+          transaccionAsociadaID: docId,
+          transaccionID: undefined,
+          fecha: d.fecha ? dayjs(d.fecha).format('YYYY-MM-DD') : '',
+          documento: d.documento || '',
+          nCF: d.ncf || d.nCF || '',
+          montoOriginal: d.montoOriginal || 0,
+          monto: d.monto ?? d.montoOriginal ?? 0,
+          descuento: 0,
+          retencion: d.retencion ?? 0,
+          pagado: d.pagado ?? d.acreditado ?? 0,
+          pendiente: pendienteEfectivo(d),
+        };
+      })];
     });
   };
 
@@ -840,7 +844,7 @@ const AsientoContableFormulario: React.FC = () => {
           const docOrigen = docConfig?.origenCuenta ?? OrigenCuenta.Desconocido;
           return typeof docOrigen === 'number' ? docOrigen : (docOrigen === 'Credito' ? OrigenCuenta.Credito : OrigenCuenta.Debito);
         })()}
-        documentosIniciales={documentosAsociados.map((d: any) => d.transaccionAsociadaID ?? d.id)}
+        documentosIniciales={documentosAsociados.map((d: any) => d.id).filter(Boolean)}
         puedeAsignar={true}
       />
 
@@ -1252,7 +1256,7 @@ const AsientoContableFormulario: React.FC = () => {
                   </div>
                   <Table
                     dataSource={documentosAsociados}
-                    rowKey={(r: any) => r.transaccionAsociadaID ?? r.id}
+                    rowKey={(r: any) => r.id}
                     size="small"
                     pagination={false}
                     scroll={{ x: 1260 }}
@@ -1327,7 +1331,7 @@ render: (_: any, record: any) => (
                                 step={0.01}
                                 precision={2}
                                 value={record.descuento}
-                            onChange={(val) => handleDescuentoChange(record.transaccionAsociadaID ?? record.id, val)}
+                            onChange={(val) => handleDescuentoChange(record.id, val)}
                           />
                         ),
                       },
@@ -1346,7 +1350,7 @@ render: (_: any, record: any) => (
                                 step={0.01}
                                 precision={2}
                                 value={record.monto}
-                            onChange={(val) => handleMontoChange(record.transaccionAsociadaID ?? record.id, val)}
+                            onChange={(val) => handleMontoChange(record.id, val)}
                           />
                         ),
                       },
@@ -1360,7 +1364,7 @@ render: (_: any, record: any) => (
                             danger
                             size="small"
                             icon={<DeleteOutlined />}
-                            onClick={() => handleRemoveDoc(record.transaccionAsociadaID ?? record.id)}
+                            onClick={() => handleRemoveDoc(record.id)}
                           />
                         ),
                       },

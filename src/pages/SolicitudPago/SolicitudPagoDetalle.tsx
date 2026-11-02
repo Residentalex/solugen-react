@@ -33,7 +33,6 @@ import { formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
-import PermissionGate from '../../components/PermissionGate';
 
 const { Text } = Typography;
 
@@ -374,7 +373,29 @@ const SolicitudPagoDetalle: React.FC = () => {
             setImprimiendo(false);
           }
         }}
-extraButtons={id ? (
+extraAcciones={id ? [
+          ...((toEstadoNum(data?.estado) === 1 || toEstadoNum(data?.estado) === 3) && data?.autorizado && (data as any)?.tipoPagoCodigo && pagoGeneradoDoc
+            ? [{
+                key: 'ver-pago-generado',
+                label: `Ver ${pagoGeneradoDoc}`,
+                icon: <EyeOutlined />,
+                onClick: handleVerPagoGenerado,
+              }]
+            : []),
+          ...((toEstadoNum(data?.estado) === 1 || toEstadoNum(data?.estado) === 3) && data?.autorizado && (data as any)?.tipoPagoCodigo && !pagoGeneradoDoc
+            ? [{
+                key: 'generar-pago',
+                label: `Generar ${(data as any)?.tipoPagoCodigo}`,
+                icon: <BankOutlined />,
+                tipo: 'primary' as const,
+                onClick: handleGenerarPago,
+                loading: saving || cargandoRelacion,
+                disabled: cargandoRelacion || (!!data.pagoGenerado && !pagoGeneradoDoc),
+                permiso: { permisoEspecial: 'pe_generar_DocBancario' },
+              }]
+            : []),
+        ] : undefined}
+        extraButtons={id ? (
           <>
             {toEstadoNum(data?.estado) === 3 && reversoData && (
               <Switch
@@ -385,31 +406,8 @@ extraButtons={id ? (
                 style={{ marginLeft: 8 }}
               />
             )}
-            { (toEstadoNum(data?.estado) === 1 || toEstadoNum(data?.estado) === 3) && data?.autorizado && (data as any)?.tipoPagoCodigo && (
-              <>
-                <Divider type="vertical" />
-                {pagoGeneradoDoc ? (
-                  <Tooltip title={`Ver documento de pago generado ${pagoGeneradoDoc}`}>
-                    <Button icon={<EyeOutlined />} onClick={handleVerPagoGenerado}>
-                      Ver {pagoGeneradoDoc}
-                    </Button>
-                  </Tooltip>
-                ) : (
-                  <PermissionGate permisoEspecial="pe_generar_DocBancario">
-                    <Tooltip title="Generar documento de pago">
-                      <Button
-                        type="primary"
-                        icon={<BankOutlined />}
-                        onClick={handleGenerarPago}
-                        loading={saving || cargandoRelacion}
-                        disabled={cargandoRelacion || (!!data.pagoGenerado && !pagoGeneradoDoc)}
-                      >
-                        {`Generar ${(data as any)?.tipoPagoCodigo}`}
-                      </Button>
-                    </Tooltip>
-                  </PermissionGate>
-                )}
-              </>
+            {(toEstadoNum(data?.estado) === 1 || toEstadoNum(data?.estado) === 3) && data?.autorizado && (data as any)?.tipoPagoCodigo && (
+              <Divider type="vertical" />
             )}
           </>
         ) : undefined}

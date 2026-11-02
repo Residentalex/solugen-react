@@ -200,7 +200,7 @@ const FTransBanco: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [loadingError, setLoadingError] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [searchText, setSearchText] = useState('');
+  const [searchText, setSearchText] = useState<string>((location.state as any)?.searchText || '');
   const [pageSize, setPageSize] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
   const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -524,6 +524,7 @@ const FTransBanco: React.FC = () => {
               rangoDefault={{ desde: '', hasta: '' }}
               onFiltrosAplicar={handleFiltrosAplicar}
               searchPlaceholder="Buscar documento, concepto..."
+              searchDefaultValue={searchText}
               onSearch={handleSearch}
               pageSize={pageSize}
               onPageSizeChange={handlePageSizeChange}
@@ -557,7 +558,7 @@ const FTransBanco: React.FC = () => {
                 onClick: () => {
                   if (movimientoRef.current || loadingMov) return;
                   if (record.id) {
-                    navigate(`/FTransBanco/${record.id}`, { state: { cuentaCodigo: cuentaActiva?.noCuenta } });
+                    navigate(`/FTransBanco/${record.id}`, { state: { cuentaCodigo: cuentaActiva?.noCuenta, searchText } });
                   }
                 },
                 style: { cursor: record.id && !movimientoRef.current && !loadingMov ? 'pointer' : 'default' },

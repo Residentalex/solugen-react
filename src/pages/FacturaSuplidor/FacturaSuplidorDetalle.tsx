@@ -12,7 +12,6 @@ import {
   HistoryOutlined,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
-import PermissionGate from '../../components/PermissionGate';
 import ModalAnular from '../../components/ModalAnular/ModalAnular';
 import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import ModalVisorScanner from '../../components/ModalVisorScanner/ModalVisorScanner';
@@ -631,6 +630,16 @@ const FacturaSuplidorDetalle: React.FC = () => {
         onRevisado={handleRevisado}
         onDesaplicar={async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
+        extraAcciones={[
+          {
+            key: 'recalcular',
+            label: 'Recalcular',
+            icon: <RedoOutlined />,
+            loading: recalculando,
+            disabled: toEstadoNum(data.estado) !== 1,
+            permiso: { permisoEspecial: 'pe_recalcular' },
+          },
+        ]}
         extraButtons={
           <>
             {toEstadoNum(data?.estado) === 3 && reversoData && (
@@ -642,16 +651,6 @@ const FacturaSuplidorDetalle: React.FC = () => {
                 style={{ marginLeft: 8 }}
               />
             )}
-            <PermissionGate permisoEspecial="pe_recalcular">
-              <Button
-                icon={<RedoOutlined />}
-                onClick={handleRecalcular}
-                loading={recalculando}
-                disabled={toEstadoNum(data.estado) !== 1}
-              >
-                Recalcular
-              </Button>
-            </PermissionGate>
           </>
         }
       />

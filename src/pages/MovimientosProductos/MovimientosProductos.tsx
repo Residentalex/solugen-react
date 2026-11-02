@@ -22,6 +22,7 @@ import type { MovimientoDTO } from '../../types/movimiento';
 import type { AlmacenDTO } from '../../types/entradaAlmacen';
 import ColumnVisibilityToggle from '../../components/ColumnVisibilityToggle';
 import type { ColumnConfig } from '../../components/ColumnVisibilityToggle';
+import { useColumnasVisibles } from '../../hooks/useColumnasVisibles';
 
 const { Text } = Typography;
 
@@ -44,6 +45,7 @@ const TIPO_DOC_STYLE: Record<string, { color: string; label: string }> = {
   PV: { color: 'processing', label: 'POS' },
   DVC: { color: 'warning', label: 'Dev. Compra' },
   DEV: { color: 'warning', label: 'Dev. Venta' },
+  Existencia: { color: 'default', label: 'Existencia' },
 };
 
 const ALL_COLUMNS_CONFIG: ColumnConfig[] = [
@@ -60,23 +62,6 @@ const ALL_COLUMNS_CONFIG: ColumnConfig[] = [
   { key: 'usuario', label: 'Usuario', defaultVisible: false },
   { key: 'costoUnitario', label: 'Costo Unitario', defaultVisible: false },
 ];
-
-const DEFAULT_VISIBLE_KEYS = ALL_COLUMNS_CONFIG
-  .filter((c) => c.defaultVisible !== false)
-  .map((c) => c.key);
-
-const LS_VISIBLE_COLUMNS_KEY = 'movProd_visibleColumns';
-
-// Anexa al listado guardado las columnas nuevas marcadas como visibles por
-// defecto, sin pisar las que el usuario haya ocultado explicitamente.
-function fusionarColumnasVisibles(guardadas: string[]): string[] {
-  const validas = ALL_COLUMNS_CONFIG.map((c) => c.key);
-  const guardadasValidas = guardadas.filter((k) => validas.includes(k));
-  const faltantes = ALL_COLUMNS_CONFIG
-    .filter((c) => c.defaultVisible !== false && !guardadasValidas.includes(c.key))
-    .map((c) => c.key);
-  return [...guardadasValidas, ...faltantes];
-}
 
 function formatDateParam(d: Date): string {
   const y = d.getFullYear();
@@ -123,6 +108,65 @@ function toTitleCase(str?: string | null): string {
     .join(' ');
 }
 
+type AgruparPor =
+  | 'ninguno'
+  | 'fecha'
+  | 'documento'
+  | 'tipoDocumento'
+  | 'producto'
+  | 'familia'
+  | 'almacen'
+  | 'entidad'
+  | 'usuario';
+
+const AGRUPAR_OPTIONS: { value: Exclude<AgruparPor, 'ninguno'>; label: string }[] = [
+  { value: 'fecha', label: 'Fecha' },
+  { value: 'documento', label: 'Documento' },
+  { value: 'tipoDocumento', label: 'Tipo Documento' },
+  { value: 'producto', label: 'Producto' },
+  { value: 'familia', label: 'Familia' },
+  { value: 'almacen', label: 'Almacén' },
+  { value: 'entidad', label: 'Entidad' },
+  { value: 'usuario', label: 'Usuario' },
+];
+
+function llaveGrupo(criterio: AgruparPor, d: MovimientoDTO): string {
+  switch (criterio) {
+    case 'fecha': return (d.fecha ?? '').slice(0, 8);
+    case 'documento': return d.documento;
+    case 'tipoDocumento': return d.tipoDocumento;
+    case 'producto': return d.codigo;
+    case 'familia': return d.familia ?? '';
+    case 'almacen': return d.almacen;
+    case 'entidad': return d.entidad ?? '';
+    case 'usuario': return d.usuario?.trim() ?? '';
+    default: return '';
+  }
+}
+
+function etiquetaGrupo(criterio: AgruparPor, d: MovimientoDTO): string {
+  switch (criterio) {
+    case 'fecha': return formatDate(d.fecha);
+    case 'documento': return d.documento || '-';
+    case 'tipoDocumento': return TIPO_DOC_STYLE[d.tipoDocumento]?.label ?? d.tipoDocumento;
+    case 'producto': return `${d.codigo}${d.articulo ? ' - ' + toTitleCase(d.articulo) : ''}`;
+    case 'familia': return toTitleCase(d.familia) || '(Sin familia)';
+    case 'almacen': return toTitleCase(d.almacen) || '(Sin almacén)';
+    case 'entidad': return toTitleCase(d.entidad) || '(Sin entidad)';
+    case 'usuario': return toTitleCase(d.usuario?.trim()) || '(Sin usuario)';
+    default: return '';
+  }
+}
+
+type FilaMovimiento = MovimientoDTO & {
+  key: string;
+  esGrupo?: boolean;
+  grupoEtiqueta?: string;
+  grupoLlave?: string;
+  grupoCantidad?: number;
+  children?: FilaMovimiento[];
+};
+
 type FiltrosMov = {
   desde: string;
   hasta: string;
@@ -140,26 +184,17 @@ const MovimientosProductos: React.FC = () => {
 
   const [data, setData] = useState<MovimientoDTO[]>([]);
   const [loading, setLoading] = useState(false);
-  // Guardia contra ejecuciones concurrentes (el state no bloquea el doble clic)
-  const loadingRef = useRef(false);
+  // Guard de secuencia: descarta respuestas obsoletas sin bloquear clics concurrentes
+  const requestIdRef = useRef(0);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(FILAS_POR_PAGINA);
   const [searchText, setSearchText] = useState('');
   const [loadingError, setLoadingError] = useState(false);
 
-  const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem(LS_VISIBLE_COLUMNS_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return fusionarColumnasVisibles(parsed);
-        }
-      }
-    } catch {
-      // ignorar error de parse
-    }
-    return DEFAULT_VISIBLE_KEYS;
+  const { visibleKeys: visibleColumnKeys, setVisibleKeys: setVisibleColumnKeys } = useColumnasVisibles({
+    pantalla: 'CMovimientosProductos',
+    columns: ALL_COLUMNS_CONFIG,
+    legacyStorageKey: 'movProd_visibleColumns',
   });
 
   const rangoDefault = useMemo(() => ({
@@ -181,33 +216,36 @@ const MovimientosProductos: React.FC = () => {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [draft, setDraft] = useState<FiltrosMov>(filtros);
   const [generated, setGenerated] = useState(false);
+  const [agruparPor, setAgruparPor] = useState<AgruparPor>('ninguno');
+  const [expandedRowKeys, setExpandedRowKeys] = useState<React.Key[]>([]);
 
-  const cargarDatos = useCallback(async () => {
-    if (loadingRef.current) return;
-    loadingRef.current = true;
+  const cargarDatos = useCallback(async (filtrosParaCargar?: FiltrosMov) => {
+    const requestId = ++requestIdRef.current;
+    setLoadingError(false);
     setLoading(true);
     try {
+      const f = filtrosParaCargar ?? filtros;
       const params: MovimientoFiltros = {
-        desde: filtros.desde,
-        hasta: filtros.hasta,
+        desde: f.desde,
+        hasta: f.hasta,
         cantidad: 100000,
         salto: 0,
-        existencia: filtros.existencia ? 'true' : 'false',
+        existencia: f.existencia ? 'true' : 'false',
       };
 
-      if (filtros.codigo) params.codigo = filtros.codigo;
-      if (filtros.almacen) params.almacen = filtros.almacen;
-      if (filtros.tipoDoc.length > 0) params.tipoDoc = filtros.tipoDoc.join(',');
-      if (filtros.noCuenta) params.noCuenta = filtros.noCuenta;
+      if (f.codigo) params.codigo = f.codigo;
+      if (f.almacen) params.almacen = f.almacen;
+      if (f.tipoDoc.length > 0) params.tipoDoc = f.tipoDoc.join(',');
+      if (f.noCuenta) params.noCuenta = f.noCuenta;
 
       const resultados = await movimientoApi.obtenerDetallado(sucursalActiva, params);
+      if (requestId !== requestIdRef.current) return;
       setData(resultados);
       setGenerated(true);
     } catch {
-      setLoadingError(true);
+      if (requestId === requestIdRef.current) setLoadingError(true);
     } finally {
-      loadingRef.current = false;
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [sucursalActiva, filtros]);
 
@@ -221,14 +259,6 @@ const MovimientosProductos: React.FC = () => {
   useEffect(() => {
     almacenApi.obtenerListado(sucursalActiva).then(setListaAlmacenes).catch((err) => console.warn('Error al cargar lista de almacenes', err));
   }, [sucursalActiva]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(LS_VISIBLE_COLUMNS_KEY, JSON.stringify(visibleColumnKeys));
-    } catch {
-      // ignorar error de storage
-    }
-  }, [visibleColumnKeys]);
 
   const handleGenerar = () => {
     setPage(1);
@@ -248,8 +278,13 @@ const MovimientosProductos: React.FC = () => {
 
   const handleExportarExcel = async () => {
     const companyName = await getCompanyName(sucursalActiva);
-    const columnHeaders = ['Fecha', 'Documento', 'Código', 'Artículo', 'Familia', 'Almacén', 'Cantidad', 'Costo', 'Tipo Doc.', 'Entidad'];
-    const dataRows = datosFiltrados.map((r) => [
+    const conGrupo = agruparPor !== 'ninguno';
+    const columnHeaders = [
+      'Fecha', 'Documento', 'Código', 'Artículo', 'Familia', 'Almacén',
+      'Cantidad', 'Costo', 'Tipo Doc.', 'Entidad', 'Referencia/Concepto', 'Usuario', 'Costo Unitario',
+      ...(conGrupo ? ['Grupo'] : []),
+    ];
+    const dataRows = detalleFiltrado.map((r) => [
       formatDate(r.fecha),
       r.documento,
       r.codigo,
@@ -260,6 +295,10 @@ const MovimientosProductos: React.FC = () => {
       r.costo ?? 0,
       r.tipoDocumento || '-',
       toTitleCase(r.entidad) || '-',
+      r.referencia || '-',
+      toTitleCase(r.usuario?.trim()) || '-',
+      r.cantidad ? r.costo / r.cantidad : 0,
+      ...(conGrupo ? [etiquetaGrupo(agruparPor, r)] : []),
     ]);
     exportToExcel({
       companyName,
@@ -277,6 +316,10 @@ const MovimientosProductos: React.FC = () => {
         { wch: 14 },
         { wch: 12 },
         { wch: 22 },
+        { wch: 22 },
+        { wch: 16 },
+        { wch: 14 },
+        ...(conGrupo ? [{ wch: 30 }] : []),
       ],
     });
   };
@@ -285,37 +328,111 @@ const MovimientosProductos: React.FC = () => {
     setPage(pagination.current);
   };
 
-  const datosFiltrados = useMemo(() => {
+  const columnaAgrupadaKey = useMemo(() => {
+    switch (agruparPor) {
+      case 'fecha': return 'fecha';
+      case 'documento': return 'documento';
+      case 'tipoDocumento': return 'tipoDocumento';
+      case 'producto': return 'articulo';
+      case 'familia': return 'familia';
+      case 'almacen': return 'almacen';
+      case 'entidad': return 'entidad';
+      case 'usuario': return 'usuario';
+      default: return '';
+    }
+  }, [agruparPor]);
+
+  const primeraColumnaKey = useMemo(() => {
+    const visibleSet = new Set(visibleColumnKeys);
+    const primera = ALL_COLUMNS_CONFIG.find(
+      (col) => visibleSet.has(col.key) || col.key === columnaAgrupadaKey
+    );
+    return primera?.key ?? 'fecha';
+  }, [visibleColumnKeys, columnaAgrupadaKey]);
+
+  const detalleFiltrado = useMemo<MovimientoDTO[]>(() => {
     if (!searchText) return data;
     const t = searchText.toLowerCase();
-    return data.filter(d =>
+    return data.filter((d) =>
+      d.documento?.toLowerCase().includes(t) ||
       d.codigo?.toLowerCase().includes(t) ||
       d.articulo?.toLowerCase().includes(t) ||
-      d.familia?.toLowerCase().includes(t)
+      d.familia?.toLowerCase().includes(t) ||
+      d.almacen?.toLowerCase().includes(t) ||
+      d.entidad?.toLowerCase().includes(t) ||
+      d.usuario?.toLowerCase().includes(t) ||
+      d.tipoDocumento?.toLowerCase().includes(t)
     );
   }, [data, searchText]);
 
-  const datosPaginados = useMemo(() => {
+  const filas = useMemo<FilaMovimiento[]>(() => {
+    const detalle: FilaMovimiento[] = detalleFiltrado.map((d, i) => ({
+      ...d,
+      key: `${d.documento}-${d.codigo}-${d.almacen}-${d.familia ?? ''}-${i}`,
+    }));
+
+    if (agruparPor === 'ninguno') return detalle;
+
+    const grupos = new Map<string, FilaMovimiento>();
+    for (const f of detalle) {
+      const llave = llaveGrupo(agruparPor, f);
+      let g = grupos.get(llave);
+      if (!g) {
+        g = {
+          ...f,
+          key: `grupo-${llave}`,
+          esGrupo: true,
+          grupoEtiqueta: etiquetaGrupo(agruparPor, f),
+          grupoLlave: llave,
+          grupoCantidad: 0,
+          cantidad: 0,
+          costo: 0,
+          children: [],
+        };
+        grupos.set(llave, g);
+      }
+      g.grupoCantidad = (g.grupoCantidad ?? 0) + 1;
+      g.cantidad = (g.cantidad ?? 0) + (f.cantidad ?? 0);
+      g.costo = (g.costo ?? 0) + (f.costo ?? 0);
+      g.children!.push(f);
+    }
+
+    return Array.from(grupos.values()).sort((a, b) =>
+      (a.grupoLlave ?? '').localeCompare(b.grupoLlave ?? '', undefined, { sensitivity: 'base' })
+    );
+  }, [detalleFiltrado, agruparPor]);
+
+  const filasPaginadas = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return datosFiltrados.slice(start, start + pageSize);
-  }, [datosFiltrados, page, pageSize]);
+    return filas.slice(start, start + pageSize);
+  }, [filas, page, pageSize]);
 
   const totales = useMemo(() => {
     let cantidad = 0;
     let costo = 0;
-    for (const d of datosFiltrados) {
+    for (const d of detalleFiltrado) {
       cantidad += d.cantidad ?? 0;
       costo += d.costo ?? 0;
     }
     return { cantidad, costo };
-  }, [datosFiltrados]);
+  }, [detalleFiltrado]);
 
   const resumenMovimiento = useMemo(() => {
-    const entradas = datosFiltrados.filter((r) => r.tipoDocumento === 'ENP').length;
-    const salidas = datosFiltrados.filter((r) => r.tipoDocumento === 'SAP').length;
+    const base = !searchText
+      ? data
+      : data.filter(d => {
+          const t = searchText.toLowerCase();
+          return (
+            d.codigo?.toLowerCase().includes(t) ||
+            d.articulo?.toLowerCase().includes(t) ||
+            d.familia?.toLowerCase().includes(t)
+          );
+        });
+    const entradas = base.filter((r) => r.tipoDocumento === 'ENP').length;
+    const salidas = base.filter((r) => r.tipoDocumento === 'SAP').length;
     const saldo = entradas - salidas;
     return { entradas, salidas, saldo };
-  }, [datosFiltrados]);
+  }, [data, searchText]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -355,9 +472,12 @@ const MovimientosProductos: React.FC = () => {
   };
 
   const aplicarFiltros = () => {
+    const next = { ...draft };
     setPopoverOpen(false);
-    setFiltros({ ...draft });
+    setFiltros(next);
     setPage(1);
+    setSearchText('');
+    if (generated) cargarDatos(next);
   };
 
   const limpiarFiltros = () => {
@@ -449,7 +569,7 @@ const MovimientosProductos: React.FC = () => {
           style={{ width: '100%' }}
           value={draft.almacen || undefined}
           onChange={(val) => setDraft({ ...draft, almacen: val ?? '' })}
-          options={listaAlmacenes.map(a => ({ value: a.codigo, label: a.nombre }))}
+          options={listaAlmacenes.map(a => ({ value: a.idExterno ?? a.codigo, label: a.nombre }))}
           filterOption={(input, option) =>
             (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
           }
@@ -497,32 +617,48 @@ const MovimientosProductos: React.FC = () => {
     style: { verticalAlign: 'top' as const, whiteSpace: 'normal' as const, wordBreak: 'break-word' as const },
   });
 
-  const ALL_COLUMN_DEFS: ColumnsType<MovimientoDTO> = [
+  const celdaConGrupo = (
+    colKey: string,
+    renderNormal: (val: any, record: FilaMovimiento) => React.ReactNode,
+  ) =>
+    (val: any, record: FilaMovimiento): React.ReactNode => {
+      if (!record.esGrupo) return renderNormal(val, record);
+      if (colKey === primeraColumnaKey) {
+        return (
+          <Text strong>
+            {record.grupoEtiqueta} ({record.grupoCantidad})
+          </Text>
+        );
+      }
+      return '';
+    };
+
+  const ALL_COLUMN_DEFS: ColumnsType<FilaMovimiento> = [
     {
       title: 'Fecha',
       dataIndex: 'fecha',
       key: 'fecha',
       width: 130,
-      render: (f: string) => <FechaColumnCell fecha={f} />,
+      render: celdaConGrupo('fecha', (f: string) => <FechaColumnCell fecha={f} />),
     },
     {
       title: 'Documento',
       dataIndex: 'documento',
       key: 'documento',
       width: 140,
-      render: (doc: string) => <Text strong>{doc}</Text>,
+      render: celdaConGrupo('documento', (doc: string) => <Text strong>{doc}</Text>),
     },
     {
       title: 'Artículo',
       key: 'articulo',
       width: 260,
       onCell: celdaWrap,
-      render: (_: unknown, record: MovimientoDTO) => (
+      render: celdaConGrupo('articulo', (_: unknown, record: FilaMovimiento) => (
         <Text>
           <Text strong>{record.codigo}</Text>
           {record.articulo ? <Text> - {toTitleCase(record.articulo)}</Text> : null}
         </Text>
-      ),
+      )),
     },
     {
       title: 'Familia',
@@ -530,7 +666,7 @@ const MovimientosProductos: React.FC = () => {
       key: 'familia',
       width: 150,
       onCell: celdaWrap,
-      render: (val: string) => <Text>{toTitleCase(val) || '-'}</Text>,
+      render: celdaConGrupo('familia', (val: string) => <Text>{toTitleCase(val) || '-'}</Text>),
     },
     {
       title: 'Almacén',
@@ -538,37 +674,55 @@ const MovimientosProductos: React.FC = () => {
       key: 'almacen',
       width: 150,
       onCell: celdaWrap,
-      render: (val: string) => <Text>{toTitleCase(val)}</Text>,
+      render: celdaConGrupo('almacen', (val: string) => <Text>{toTitleCase(val)}</Text>),
     },
     {
       title: 'Cantidad',
       dataIndex: 'cantidad',
       key: 'cantidad',
-      width: 90,
+      width: 120,
       align: 'right',
-      render: (val: number) => (
-        <Text style={{ color: val < 0 ? '#f5222d' : undefined }}>
-          {formatNumber(val)}
-        </Text>
-      ),
+      render: (val: number, record: FilaMovimiento) => {
+        if (record.esGrupo) {
+          return (
+            <Text strong style={{ whiteSpace: 'nowrap' }}>
+              {formatNumber(record.cantidad ?? 0)}
+            </Text>
+          );
+        }
+        return (
+          <Text style={{ color: val < 0 ? '#f5222d' : undefined, whiteSpace: 'nowrap' }}>
+            {formatNumber(val)}
+          </Text>
+        );
+      },
     },
     {
       title: 'Costo',
       dataIndex: 'costo',
       key: 'costo',
-      width: 110,
+      width: 150,
       align: 'right',
-      render: (val: number) => <Text>{formatCurrency(val)}</Text>,
+      render: (val: number, record: FilaMovimiento) => {
+        if (record.esGrupo) {
+          return (
+            <Text strong style={{ whiteSpace: 'nowrap' }}>
+              {formatCurrency(record.costo ?? 0)}
+            </Text>
+          );
+        }
+        return <Text style={{ whiteSpace: 'nowrap' }}>{formatCurrency(val)}</Text>;
+      },
     },
     {
       title: 'Tipo Doc.',
       dataIndex: 'tipoDocumento',
       key: 'tipoDocumento',
       width: 100,
-      render: (val: string) => {
+      render: celdaConGrupo('tipoDocumento', (val: string) => {
         const tag = TIPO_DOC_STYLE[val] || { color: 'default', label: val || '-' };
         return <Tag color={tag.color}>{tag.label}</Tag>;
-      },
+      }),
     },
     {
       title: 'Entidad',
@@ -576,7 +730,7 @@ const MovimientosProductos: React.FC = () => {
       key: 'entidad',
       width: 180,
       onCell: celdaWrap,
-      render: (val: string) => <Text>{toTitleCase(val) || '-'}</Text>,
+      render: celdaConGrupo('entidad', (val: string) => <Text>{toTitleCase(val) || '-'}</Text>),
     },
     {
       title: 'Referencia/Concepto',
@@ -584,7 +738,7 @@ const MovimientosProductos: React.FC = () => {
       key: 'referencia',
       width: 220,
       onCell: celdaWrap,
-      render: (val: string) => <Text>{val || '-'}</Text>,
+      render: celdaConGrupo('referencia', (val: string) => <Text>{val || '-'}</Text>),
     },
     {
       title: 'Usuario',
@@ -592,44 +746,80 @@ const MovimientosProductos: React.FC = () => {
       key: 'usuario',
       width: 120,
       onCell: celdaWrap,
-      render: (val: string) => {
+      render: celdaConGrupo('usuario', (val: string) => {
         const display = val?.trim() || '-';
         return <Text>{toTitleCase(display)}</Text>;
-      },
+      }),
     },
     {
       title: 'Costo Unitario',
       key: 'costoUnitario',
-      width: 110,
+      width: 140,
       align: 'right',
-      render: (_: unknown, record: MovimientoDTO) => {
+      render: (_: unknown, record: FilaMovimiento) => {
         const unitario = record.cantidad ? record.costo / record.cantidad : 0;
-        return <Text>{formatCurrency(unitario)}</Text>;
+        return (
+          <Text strong={!!record.esGrupo} style={{ whiteSpace: 'nowrap' }}>
+            {formatCurrency(unitario)}
+          </Text>
+        );
       },
     },
   ];
 
   const columns = useMemo(() => {
     const visibleSet = new Set(visibleColumnKeys);
-    return ALL_COLUMN_DEFS.filter((col) => visibleSet.has(col.key as string));
-  }, [visibleColumnKeys]);
+    const visibles = ALL_COLUMN_DEFS.filter(
+      (col) => visibleSet.has(col.key as string) || col.key === columnaAgrupadaKey
+    );
+
+    if (agruparPor === 'ninguno') return visibles;
+
+    const COLS_VALOR = ['cantidad', 'costo', 'costoUnitario'];
+    const fin = (() => {
+      const i = visibles.findIndex((c) => COLS_VALOR.includes(c.key as string));
+      return i === -1 ? visibles.length : i;
+    })();
+
+    return visibles.map((col, idx) => {
+      const onCellBase = col.onCell;
+      if (idx === 0) {
+        return {
+          ...col,
+          onCell: (r: FilaMovimiento) =>
+            r.esGrupo ? { colSpan: Math.max(1, fin) } : onCellBase ? onCellBase(r) : {},
+        };
+      }
+      if (idx < fin) {
+        return {
+          ...col,
+          onCell: (r: FilaMovimiento) =>
+            r.esGrupo ? { colSpan: 0 } : onCellBase ? onCellBase(r) : {},
+        };
+      }
+      return col;
+    });
+  }, [visibleColumnKeys, columnaAgrupadaKey, agruparPor]);
 
   const handleRemoveFilterTag = (key: string) => {
+    const next = { ...filtros };
     if (key === 'fecha') {
-      setFiltros({ ...filtros, desde: rangoDefault.desde, hasta: rangoDefault.hasta });
+      next.desde = rangoDefault.desde;
+      next.hasta = rangoDefault.hasta;
     } else if (key === 'codigo') {
-      setFiltros({ ...filtros, codigo: '' });
+      next.codigo = '';
     } else if (key === 'almacen') {
-      setFiltros({ ...filtros, almacen: '' });
+      next.almacen = '';
     } else if (key === 'tipoDoc') {
-      setFiltros({ ...filtros, tipoDoc: [] });
+      next.tipoDoc = [];
     } else if (key === 'noCuenta') {
-      setFiltros({ ...filtros, noCuenta: '' });
+      next.noCuenta = '';
     } else if (key === 'existencia') {
-      setFiltros({ ...filtros, existencia: true });
+      next.existencia = true;
     }
+    setFiltros(next);
     setPage(1);
-    cargarDatos();
+    cargarDatos(next);
   };
 
   return (
@@ -687,6 +877,19 @@ const MovimientosProductos: React.FC = () => {
               columns={ALL_COLUMNS_CONFIG}
               visibleKeys={visibleColumnKeys}
               onChange={setVisibleColumnKeys}
+              disabled={loading}
+            />
+            <Select
+              placeholder="Agrupar por"
+              allowClear
+              style={{ width: 190 }}
+              value={agruparPor === 'ninguno' ? undefined : agruparPor}
+              onChange={(val) => {
+                setAgruparPor((val ?? 'ninguno') as AgruparPor);
+                setPage(1);
+                setExpandedRowKeys([]);
+              }}
+              options={AGRUPAR_OPTIONS}
               disabled={loading}
             />
             <Button type="primary" onClick={handleGenerar} loading={loading} disabled={loading} style={{ minWidth: 100 }}>
@@ -749,20 +952,26 @@ const MovimientosProductos: React.FC = () => {
           </div>
         )}
 
-        <Table<MovimientoDTO>
+        <Table<FilaMovimiento>
           columns={columns}
-          dataSource={datosPaginados}
-          rowKey={(record) => `${record.documento}-${record.codigo}-${record.almacen}`}
+          dataSource={filasPaginadas}
+          rowKey="key"
           loading={loading}
           scroll={{ x: 1310 }}
           size="middle"
           onChange={handleTableChange}
+          expandable={{
+            expandedRowKeys,
+            onExpandedRowsChange: (keys) => setExpandedRowKeys(keys.map(String)),
+            rowExpandable: (r) => !!r.esGrupo && (r.children?.length ?? 0) > 0,
+          }}
+          onRow={(r) => (r.esGrupo ? { style: { background: '#fafafa', fontWeight: 600 } } : {})}
           pagination={{
             current: page,
             pageSize,
-            total: datosFiltrados.length,
+            total: filas.length,
             showSizeChanger: false,
-            showTotal: (t) => `${t} registros`,
+            showTotal: (t) => (agruparPor !== 'ninguno' ? `${t} grupos` : `${t} registros`),
             disabled: loading,
           }}
           className="paces-border-top paces-list-table"
@@ -786,14 +995,14 @@ const MovimientosProductos: React.FC = () => {
                   if (key === 'cantidad') {
                     return (
                       <Table.Summary.Cell key={key} index={idx} align="right">
-                        <Text strong>{formatNumber(totales.cantidad)}</Text>
+                        <Text strong style={{ whiteSpace: 'nowrap' }}>{formatNumber(totales.cantidad)}</Text>
                       </Table.Summary.Cell>
                     );
                   }
                   if (key === 'costo') {
                     return (
                       <Table.Summary.Cell key={key} index={idx} align="right">
-                        <Text strong>{formatCurrency(totales.costo)}</Text>
+                        <Text strong style={{ whiteSpace: 'nowrap' }}>{formatCurrency(totales.costo)}</Text>
                       </Table.Summary.Cell>
                     );
                   }

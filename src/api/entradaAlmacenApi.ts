@@ -1,5 +1,11 @@
 import { apiClient } from './client';
-import type { MovimientoVistaDTO, FiltroENP, EntradaAlmacenDTO } from '../types/entradaAlmacen';
+import type {
+  MovimientoVistaDTO,
+  FiltroENP,
+  EntradaAlmacenDTO,
+  ReporteInventarioDocumentoDTO,
+  ReporteInventarioFiltros,
+} from '../types/entradaAlmacen';
 import type { ApiResponse } from '../types/auth';
 
 const BASE = '/ENP';
@@ -42,6 +48,17 @@ export const entradaAlmacenApi = {
 
     const { data } = await apiClient.get<ApiResponse<MovimientoVistaDTO[]>>(`${BASE}/${sucursal}/filtrar`, { params });
     return { data: data.data || [], total: data.total ?? 0 };
+  },
+
+  obtenerDetallado: async (
+    sucursal: number,
+    params: ReporteInventarioFiltros
+  ): Promise<{ data: ReporteInventarioDocumentoDTO[]; total: number }> => {
+    const { data } = await apiClient.get<ApiResponse<ReporteInventarioDocumentoDTO[]>>(
+      `${BASE}/${sucursal}/detallado`,
+      { params }
+    );
+    return { data: data.data ?? [], total: data.total ?? 0 };
   },
 
   obtenerPorId: async (sucursal: number, id: number): Promise<EntradaAlmacenDTO> => {

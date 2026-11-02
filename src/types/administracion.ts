@@ -27,6 +27,7 @@ export interface UsuarioDTO {
   claveNoExpira: boolean;
   diasVigencia: number;
   empleadoID?: string;
+  refKey?: string;
   ultimoLogin?: string;
   roles: RolDTO[];
   sucursalesRoles: UsuarioSucursalRolDTO[];

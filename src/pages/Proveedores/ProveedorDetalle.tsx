@@ -6,7 +6,6 @@ import {
 } from 'antd';
 import { Select } from '../../components/Select';
 import { IdcardOutlined, PhoneOutlined, EnvironmentOutlined } from '@ant-design/icons';
-import FormularioToolbar from '../../components/FormularioToolbar';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { proveedorApi } from '../../api/proveedorApi';
@@ -350,16 +349,7 @@ const ProveedorDetalle: React.FC = () => {
   );
 
   const renderFormulario = () => (
-    <>
-      {editando && (
-        <FormularioToolbar
-          saving={guardando}
-          mode={esNuevo ? 'crear' : 'editar'}
-          onGuardar={handleGuardar}
-          onCancelar={handleCancelar}
-        />
-      )}
-      <Form form={form} layout="vertical" size="small">
+    <Form form={form} layout="vertical" size="small">
       {isLarge ? (
         <Row gutter={16}>
           <Col xxl={18}>
@@ -384,7 +374,6 @@ const ProveedorDetalle: React.FC = () => {
         </div>
       )}
     </Form>
-    </>
   );
 
   return (
@@ -412,6 +401,8 @@ const ProveedorDetalle: React.FC = () => {
       dataDisponible={!!data}
       modo={esNuevo ? 'crear' : 'editar'}
       onEditar={!esNuevo && !editando && puedeEditar ? () => setEditando(true) : undefined}
+      onGuardar={editando ? handleGuardar : undefined}
+      onCancelar={editando ? handleCancelar : undefined}
       guardando={guardando}
     >
       {renderFormulario()}
