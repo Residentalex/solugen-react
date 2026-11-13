@@ -161,6 +161,7 @@ const pageTitles: Record<string, string> = {
   MTicket: 'Tickets',
   Actividades: 'Actividades',
   MApiToken: 'API Tokens',
+  mActualizacion: 'Actualizaciones',
   chat: 'Chat interno',
 };
 

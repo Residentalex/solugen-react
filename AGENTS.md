@@ -334,6 +334,15 @@ En todo formulario con `Form.Item name="sucursal"`, el campo debe preseleccionar
 - No debe cambiarse `esDocumentoInventario` a `false` ni removerse esta prop.
 - En documentos de inventario el filtro por `origen` no aplica: el SQL de `pendienteInv` ya filtra por `tipo_doc = 'DVC'`.
 
+## Modal Buscar Documentos Relacionados (`BuscarDocumentoModal`)
+
+- La columna "Doc. Asociado" (`doc.referencia`) con prefijo `SPA-` es **informativa**: `ServicioTransaccion.ObtenerDocumentosPendientes` llena `referencia` con la última SPA asociada solo para mostrarla en pantalla. **No debe usarse para bloquear la selección.**
+- El bloqueo real lo decide el endpoint `GET /SPA/{sucursal}/bloqueo-documento/{id}`, que solo bloquea cuando la SPA asociada **no** ha generado su documento de pago (`ObtenerSolicitudBloqueante`). Un documento con SPA que ya generó pago y tiene saldo pendiente **sí** debe poder seleccionarse y asignarse.
+- La regla por `referencia` se mantiene solo para referencias que no son SPA (documento asociado no aplicado) y sigue excluyendo `documentoEnviado`.
+- Siguen sin ser seleccionables: documentos con saldo a favor (`pagado > montoOriginal`) y con moneda distinta a la del documento principal.
+- El chequeo de bloqueo corre en los 7 módulos que usan el modal, solo para documentos con Doc. Asociado SPA, y es **fail-closed**: si la verificación falla, el documento queda bloqueado y se avisa con `message.error`.
+- No comparar la sucursal con falsy (`!sucursal`): `Sucursal.OrensePlaza = 0` es válida. Usar `== null`.
+
 ## Tab de Asientos Contables
 
 En todos los formularios que tengan tab de asientos contables, la visibilidad del tab editable con botón GENERAR debe regirse exclusivamente por esta condición:

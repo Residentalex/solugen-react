@@ -44,7 +44,7 @@ import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import ModalAnular from '../../components/ModalAnular/ModalAnular';
 import ModalFechaVencimiento from '../../components/ModalFechaVencimiento/ModalFechaVencimiento';
 import ModalVisorScanner from '../../components/ModalVisorScanner/ModalVisorScanner';
-import { formatNumber, toTitleCase, formatDate, extraerMensajeError } from '../../utils/formats';
+import { formatNumber, formatNumber4, toTitleCase, formatDate, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { resolveEstado, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import type { EntradaAlmacenDTO, AsientoContableDTO, SuplidorDTO, EntidadDTO } from '../../types/entradaAlmacen';
@@ -483,7 +483,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
               } else if (Number(detalleOC.medida?.factor || 1) !== Number(record.medida?.factor || 1)) {
                 motivo = `Factor OC: ${detalleOC.medida?.factor || 1} | ENP: ${record.medida?.factor || 1}`;
               } else if (Number(record.cantidadBonificable) === 0 && Math.abs(Number(detalleOC.costo) - Number(record.costo)) > 1) {
-                motivo = `Costo OC: ${formatNumber(detalleOC.costo)} | ENP: ${formatNumber(record.costo)}`;
+                motivo = `Costo OC: ${formatNumber4(detalleOC.costo)} | ENP: ${formatNumber4(record.costo)}`;
               }
 
               return (
@@ -575,9 +575,9 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
         const costoUnitario = costoConDescuento / factor;
         return (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <div>{formatNumber(costoBase)}</div>
+            <div>{formatNumber4(costoBase)}</div>
             <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999', marginTop: 'auto' }}>
-              {formatNumber(costoUnitario)} × {factor}
+              {formatNumber4(costoUnitario)} × {factor}
             </div>
           </div>
         );

@@ -83,6 +83,14 @@ export function formatNumber(n: number): string {
 }
 
 /**
+ * Formatea un número con exactamente 4 decimales (para costos de línea,
+ * donde el backend persiste NUMERIC(18,4)).
+ */
+export function formatNumber4(n: number): string {
+  return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(n);
+}
+
+/**
  * `formatter` de `InputNumber` para montos: inyecta el simbolo real y aplica
  * `formatNumber` (separador de miles y 2 decimales).
  *
@@ -128,6 +136,16 @@ export function crearParserMoneda() {
 export function redondear2(val: number): number {
   const signo = val < 0 ? -1 : 1;
   return (signo * Math.round(Math.abs(val) * 100)) / 100;
+}
+
+/**
+ * Redondea un número a 4 decimales con criterio AwayFromZero, igual que
+ * `redondear2` pero para costos de línea (NUMERIC(18,4)). Evita residuos de
+ * coma flotante al pegar o recalcular costos con más de 4 decimales.
+ */
+export function redondear4(val: number): number {
+  const signo = val < 0 ? -1 : 1;
+  return (signo * Math.round(Math.abs(val) * 10000)) / 10000;
 }
 
 export function getInitials(name: string): string {

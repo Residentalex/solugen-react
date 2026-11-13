@@ -13,6 +13,7 @@ import {
   ReloadOutlined,
   WarningOutlined,
   InfoCircleOutlined,
+  PlusOutlined,
 } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
 import * as XLSX from 'xlsx';
@@ -48,6 +49,12 @@ interface CreadoDoc {
   referencia: string;
   nota: string;
   sucursal: string;
+}
+
+interface ReutilizadoDoc {
+  id: number;
+  fila: FilaDocBancario;
+  warning: string;
 }
 
 interface ErrorDoc {
@@ -144,7 +151,8 @@ const ImportarDocBanco: React.FC = () => {
   const [nombreArchivo, setNombreArchivo] = useState('');
   const [tamanoArchivo, setTamanoArchivo] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [resultado, setResultado] = useState<{ creados: CreadoDoc[]; errores: ErrorDoc[] } | null>(null);
+  const [resultado, setResultado] = useState<{ creados: CreadoDoc[]; reutilizados: ReutilizadoDoc[]; errores: ErrorDoc[] } | null>(null);
+  const [mostrarReutilizados, setMostrarReutilizados] = useState(true);
 
   useEffect(() => {
     setActiveModule('OImportarDocBanco');
@@ -321,6 +329,7 @@ const ImportarDocBanco: React.FC = () => {
     setProgreso({ actual: 0, total: filasAProcesar.length });
 
     const creados: CreadoDoc[] = [];
+    const reutilizados: ReutilizadoDoc[] = [];
     const errores: ErrorDoc[] = [];
 
     for (let i = 0; i < filasAProcesar.length; i++) {
@@ -343,24 +352,28 @@ const ImportarDocBanco: React.FC = () => {
           debitos: 0,
           creditos: 0,
           tasa: 1,
-          subTotal: 0,
+          subTotal: fila.monto,
           descuento: 0,
           impuestos: 0,
           retenciones: 0,
           periodo: new Date().getMonth() + 1,
         };
 
-        const idCreado = await transaccionBancariaApi.crearDocBancario(sucursalActiva, dto, postear);
-        creados.push({
-          id: idCreado,
-          fecha: fila.fecha,
-          tipoDocumento: tipoDoc,
-          monto: fila.monto,
-          moneda: fila.moneda,
-          referencia: fila.referencia,
-          nota: fila.nota,
-          sucursal: fila.sucursal,
-        });
+        const { id: idCreado, warning } = await transaccionBancariaApi.crearDocBancario(sucursalActiva, dto, postear);
+        if (warning) {
+          reutilizados.push({ id: idCreado, fila, warning });
+        } else {
+          creados.push({
+            id: idCreado,
+            fecha: fila.fecha,
+            tipoDocumento: tipoDoc,
+            monto: fila.monto,
+            moneda: fila.moneda,
+            referencia: fila.referencia,
+            nota: fila.nota,
+            sucursal: fila.sucursal,
+          });
+        }
       } catch (err: any) {
         const msg = err?.response?.data?.errorMessage || `Error en fila ${i + 1}`;
         errores.push({ fila, error: msg });
@@ -369,7 +382,8 @@ const ImportarDocBanco: React.FC = () => {
     }
 
     setCreando(false);
-    setResultado({ creados, errores });
+    setMostrarReutilizados(true);
+    setResultado({ creados, reutilizados, errores });
   };
 
   // ===== Reintentar únicamente registros corregibles (errores de API) =====
@@ -380,6 +394,7 @@ const ImportarDocBanco: React.FC = () => {
     const reintentos = resultado.errores;
     const nuevosErrores: ErrorDoc[] = [];
     const nuevosCreados: CreadoDoc[] = [];
+    const nuevosReutilizados: ReutilizadoDoc[] = [];
 
     for (let i = 0; i < reintentos.length; i++) {
       const fila = reintentos[i].fila;
@@ -401,14 +416,88 @@ const ImportarDocBanco: React.FC = () => {
           debitos: 0,
           creditos: 0,
           tasa: 1,
-          subTotal: 0,
+          subTotal: fila.monto,
           descuento: 0,
           impuestos: 0,
           retenciones: 0,
           periodo: new Date().getMonth() + 1,
         };
 
-        const idCreado = await transaccionBancariaApi.crearDocBancario(sucursalActiva, dto, postear);
+        const { id: idCreado, warning } = await transaccionBancariaApi.crearDocBancario(sucursalActiva, dto, postear);
+        if (warning) {
+          nuevosReutilizados.push({ id: idCreado, fila, warning });
+        } else {
+          nuevosCreados.push({
+            id: idCreado,
+            fecha: fila.fecha,
+            tipoDocumento: tipoDoc,
+            monto: fila.monto,
+            moneda: fila.moneda,
+            referencia: fila.referencia,
+            nota: fila.nota,
+            sucursal: fila.sucursal,
+          });
+        }
+      } catch (err: any) {
+        const msg = err?.response?.data?.errorMessage || `Error en fila ${i + 1}`;
+        nuevosErrores.push({ fila, error: msg });
+      }
+    }
+
+    setCreando(false);
+    setMostrarReutilizados(true);
+    setResultado((prev) => prev ? {
+      creados: [...prev.creados, ...nuevosCreados],
+      reutilizados: [...prev.reutilizados, ...nuevosReutilizados],
+      errores: nuevosErrores,
+    } : null);
+
+    if (nuevosErrores.length === 0) {
+      message.success(`Se reintentaron ${reintentos.length} registros correctamente.`);
+    } else {
+      message.warning(`${nuevosCreados.length} reintentos exitosos, ${nuevosReutilizados.length} ya existían. ${nuevosErrores.length} aún fallan.`);
+    }
+  };
+
+  // ===== Crear documentos nuevos a partir de los reutilizados (duplicados) =====
+  const handleCrearReutilizados = async () => {
+    if (!resultado || resultado.reutilizados.length === 0) return;
+
+    const pendientes = resultado.reutilizados;
+    setCreando(true);
+    setProgreso({ actual: 0, total: pendientes.length });
+
+    const nuevosCreados: CreadoDoc[] = [];
+    const nuevosErrores: ErrorDoc[] = [];
+
+    for (let i = 0; i < pendientes.length; i++) {
+      const fila = pendientes[i].fila;
+      try {
+        const tipoDoc = fila.tipoDocumento || 'DEP';
+        const dto: Partial<TransaccionDTO> = {
+          id: 0,
+          fechaDocumento: fila.fecha ? toISOFormat(fila.fecha) : toISOFormat(new Date()),
+          total: fila.monto,
+          nota: fila.nota,
+          referencia: fila.referencia,
+          codigoSucursal: fila.sucursal,
+          codigoConcepto: fila.concepto,
+          codigoMoneda: fila.moneda,
+          ctaBancaria: fila.ctaBancaria,
+          estado: 1,
+          tipoDocumento: tipoDoc,
+          documento: { codigo: tipoDoc },
+          debitos: 0,
+          creditos: 0,
+          tasa: 1,
+          subTotal: fila.monto,
+          descuento: 0,
+          impuestos: 0,
+          retenciones: 0,
+          periodo: new Date().getMonth() + 1,
+        };
+
+        const { id: idCreado } = await transaccionBancariaApi.crearDocBancario(sucursalActiva, dto, postear, true);
         nuevosCreados.push({
           id: idCreado,
           fecha: fila.fecha,
@@ -420,21 +509,23 @@ const ImportarDocBanco: React.FC = () => {
           sucursal: fila.sucursal,
         });
       } catch (err: any) {
-        const msg = err?.response?.data?.errorMessage || `Error en fila ${i + 1}`;
+        const msg = err?.response?.data?.errorMessage || `Error en fila ${fila.key}`;
         nuevosErrores.push({ fila, error: msg });
       }
+      setProgreso({ actual: i + 1, total: pendientes.length });
     }
 
     setCreando(false);
     setResultado((prev) => prev ? {
       creados: [...prev.creados, ...nuevosCreados],
-      errores: nuevosErrores,
+      reutilizados: [],
+      errores: [...prev.errores, ...nuevosErrores],
     } : null);
 
     if (nuevosErrores.length === 0) {
-      message.success(`Se reintentaron ${reintentos.length} registros correctamente.`);
+      message.success(`Se crearon ${nuevosCreados.length} documentos nuevos.`);
     } else {
-      message.warning(`${nuevosCreados.length} reintentos exitosos. ${nuevosErrores.length} aún fallan.`);
+      message.warning(`Se crearon ${nuevosCreados.length} documentos nuevos. ${nuevosErrores.length} fallaron.`);
     }
   };
 
@@ -560,19 +651,23 @@ const ImportarDocBanco: React.FC = () => {
 
   const handleCerrarResultado = () => {
     if (!resultado) return;
-    const { creados, errores } = resultado;
+    const { creados, reutilizados, errores } = resultado;
 
     if (errores.length === 0) {
       setFilas([]);
       setFilasValidadas([]);
       setNombreArchivo('');
       setTamanoArchivo(null);
-      message.success(`Se crearon ${creados.length} documentos bancarios exitosamente.`);
+      if (reutilizados.length > 0) {
+        message.success(`Se crearon ${creados.length} documentos y se reutilizaron ${reutilizados.length} existentes.`);
+      } else {
+        message.success(`Se crearon ${creados.length} documentos bancarios exitosamente.`);
+      }
     } else {
       const clavesFallidas = new Set(errores.map((e) => e.fila.key));
       setFilas((prev) => prev.filter((f) => clavesFallidas.has(f.key)));
       setFilasValidadas((prev) => prev.filter((v) => clavesFallidas.has(v.fila.key)));
-      message.warning(`Se crearon ${creados.length} documentos. ${errores.length} fallaron.`);
+      message.warning(`Se crearon ${creados.length} documentos y se reutilizaron ${reutilizados.length} existentes. ${errores.length} fallaron.`);
     }
     setResultado(null);
   };
@@ -739,6 +834,65 @@ const ImportarDocBanco: React.FC = () => {
               pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (t) => `${t} registros` }}
               scroll={{ x: 900 }}
             />
+            {resultado.reutilizados.length > 0 && mostrarReutilizados && (
+              <>
+                <div style={{ marginBottom: 8, marginTop: 16 }}>
+                  <Text strong type="warning">Ya existían ({resultado.reutilizados.length})</Text>
+                </div>
+                <Alert
+                  message="Estos documentos ya existían y no se crearon de nuevo."
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 8 }}
+                />
+                <Table
+                  className="paces-list-table"
+                  dataSource={resultado.reutilizados}
+                  rowKey="id"
+                  size="small"
+                  pagination={false}
+                  columns={[
+                    {
+                      title: 'Fila', key: 'fila', width: 70,
+                      render: (_: any, record: ReutilizadoDoc) => <Text>{record.fila.key}</Text>,
+                    },
+                    {
+                      title: 'Fecha', key: 'fecha', width: 120,
+                      render: (_: any, record: ReutilizadoDoc) => <Text>{formatDateDisplay(record.fila.fecha)}</Text>,
+                    },
+                    {
+                      title: 'Tipo', key: 'tipo', width: 80,
+                      render: (_: any, record: ReutilizadoDoc) => <Text>{record.fila.tipoDocumento}</Text>,
+                    },
+                    {
+                      title: 'Monto', key: 'monto', width: 120, align: 'right' as const,
+                      render: (_: any, record: ReutilizadoDoc) => <Text strong>{formatNumber(record.fila.monto)}</Text>,
+                    },
+                    {
+                      title: 'Referencia', key: 'referencia', width: 130,
+                      render: (_: any, record: ReutilizadoDoc) => <Text>{record.fila.referencia || '-'}</Text>,
+                    },
+                    {
+                      title: 'Documento existente', key: 'warning',
+                      render: (_: any, record: ReutilizadoDoc) => <Text type="warning">{record.warning}</Text>,
+                    },
+                  ]}
+                />
+                <div style={{ marginTop: 16, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <Button onClick={() => setMostrarReutilizados(false)}>
+                    Dejar los existentes
+                  </Button>
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={handleCrearReutilizados}
+                    loading={creando}
+                  >
+                    Crear documentos nuevos ({resultado.reutilizados.length})
+                  </Button>
+                </div>
+              </>
+            )}
             {resultado.errores.length > 0 && (
               <>
                 <div style={{ marginBottom: 8, marginTop: 16 }}>

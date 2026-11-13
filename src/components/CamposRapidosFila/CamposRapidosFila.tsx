@@ -154,6 +154,7 @@ function renderCampoRapido(config: CampoRapidoConfig): React.ReactNode {
   return contenido;
 }
 
+// Orden de render fijo: ncf, ncfModificado, referencia, diasCredito, tasa, moneda.
 const CamposRapidosFila: React.FC<CamposRapidosFilaProps> = ({
   ncf,
   ncfModificado,

@@ -10,12 +10,16 @@ export const transaccionBancariaApi = {
     return data.data;
   },
 
-  /** Crea un documento bancario vía POST /Transaccion/{sucursal}/DocBancario */
-  crearDocBancario: async (sucursal: number, dto: Partial<TransaccionDTO>, postear: boolean = false): Promise<number> => {
+  /**
+   * Crea un documento bancario vía POST /Transaccion/{sucursal}/DocBancario.
+   * El backend es idempotente: si ya existe un documento equivalente devuelve el ID existente
+   * y lo señala en `warning` (además de devolver el ID en `data`).
+   */
+  crearDocBancario: async (sucursal: number, dto: Partial<TransaccionDTO>, postear: boolean = false, permitirDuplicado: boolean = false): Promise<{ id: number; warning?: string }> => {
     const { data } = await apiClient.post<ApiResponse<number>>(`${BASE}/${sucursal}/DocBancario`, dto, {
-      params: { postear }
+      params: { postear, permitirDuplicado }
     });
-    return data.data;
+    return { id: data.data, warning: data.warning };
   },
 
   /** Actualiza una transacción vía PUT /Transaccion/{sucursal} */

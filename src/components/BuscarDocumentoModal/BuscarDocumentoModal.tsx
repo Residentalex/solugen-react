@@ -87,11 +87,30 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
   // Evita warning duplicado cuando antd re-dispara onChange al re-sincronizar la selección controlada
   const warnAsociadoRef = useRef<Set<string>>(new Set());
 
-  // Mapa: transaccionId -> info de la SPA que bloquea. Solo para SPA no anulada sin pago generado.
+  // Mapa: id del documento pendiente -> info de la SPA que lo bloquea (o bloqueo fail-closed).
+  // Solo para SPA no anulada sin pago generado, o errores de verificacion del endpoint.
   interface BloqueoInfo { bloqueado: boolean; spaDocumento: string; spaId: number; }
   const [bloqueosMap, setBloqueosMap] = useState<Record<number, BloqueoInfo>>({});
 
+  // Ref con la seleccion mas reciente, para purgar bloqueados sin agregar selectedRowKeys
+  // como dependencia del barrido (evita re-barrer en cada cambio de seleccion).
+  const selectedRowKeysRef = useRef<React.Key[]>([]);
+  // Evita repetir el aviso de documentos quitados por bloqueo (una sola vez por documento).
+  const warnBloqueoRef = useRef<Set<string>>(new Set());
+
   const sucursalBloqueo = sucursalForBloqueo ?? sucursalActiva;
+
+  // Mantener sincronizada la ref de seleccion (sin disparar el barrido de bloqueos).
+  useEffect(() => {
+    selectedRowKeysRef.current = selectedRowKeys;
+  }, [selectedRowKeys]);
+
+  // Clave estable de documentosIniciales: los 7 consumidores pasan un array nuevo en cada
+  // render, lo que dispararia el barrido completo. Comparar por contenido evita ese re-barrido.
+  const documentosInicialesClave = useMemo(
+    () => (documentosIniciales && documentosIniciales.length ? documentosIniciales.join(',') : ''),
+    [documentosIniciales]
+  );
 
   // Subconjunto del documento pendiente que necesita la regla de moneda. El endpoint devuelve el
   // objeto completo, pero para esta regla solo importan el codigo y la moneda.
@@ -119,6 +138,16 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
     if (!delDocumento) return false;
     return delDocumento.toUpperCase() !== monedaPrincipal.toUpperCase();
   }, [monedaPrincipal, monedaDocumento]);
+
+  // ===== Helper: detectar si la referencia (Doc. Asociado) es una SPA =====
+  // `referencia` con prefijo SPA- es informativa (la ultima SPA asociada validada que el
+  // backend usa solo para mostrarla en pantalla) y NO implica bloqueo: el bloqueo real lo
+  // decide `bloqueosMap` via ServicioSolicitudPago.ObtenerSolicitudBloqueante.
+  const esReferenciaSpa = useCallback((doc: any): boolean => {
+    const ref = doc?.referencia;
+    if (!ref) return false;
+    return String(ref).trim().toUpperCase().startsWith('SPA-');
+  }, []);
 
   // ===== Helper: construir codigo completo del documento =====
   const obtenerCodigoCompleto = useCallback((doc: any): string => {
@@ -252,7 +281,9 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       setSearchText('');
       setMontoADistribuir(normalizarMonto(montoTotal || 0));
       setMontosPorFila({});
+      setBloqueosMap({});
       warnAsociadoRef.current = new Set();
+      warnBloqueoRef.current = new Set();
 
       cargar().then((docs) => {
         const montosIniciales: Record<string, number> = {};
@@ -321,24 +352,41 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
 
   // ===== Verificar SPA bloqueantes para documentos pendientes =====
   useEffect(() => {
-    if (!open || !documentos.length || !transaccionId || !sucursalBloqueo) return;
+    // Corre en TODOS los modulos que usan el modal (SPA, NC, ND, RI, Transaccion Bancaria,
+    // Distribucion de Balance, Asientos Contables). No depende de transaccionId: el endpoint
+    // recibe el id del documento pendiente como path param.
+    //
+    // Para no degradar la apertura del modal, solo se verifica el subconjunto de documentos
+    // cuyo Doc. Asociado es una SPA: son exactamente los que el cambio anterior dejo de
+    // bloquear por la regla de `referencia`. El resto conserva su bloqueo previo por
+    // referencia no-SPA y no requiere la llamada HTTP.
+    //
+    // Nota: sucursalBloqueo puede ser 0 (Sucursal.OrensePlaza es valida), por eso se compara
+    // con null/undefined y no con falsy.
+    if (!open || !documentos.length || sucursalBloqueo == null) return;
 
-    const documentosIds = documentos.map(d => d.id);
-    // En batches para no sobrecargar el endpoint (aunque podriamos enviar todos)
+    let cancelado = false;
+
     const chequearBloqueos = async () => {
-      try {
-        // Para cada documento, verificar si tiene SPA bloqueante
-        const nuevosBloqueos: Record<number, BloqueoInfo> = {};
-        for (const doc of documentos) {
-          // Excluir si es parte de los documentos ya asociados (en modo editar)
-          if (documentosIniciales?.includes(doc.id)) continue;
+      // Documentos con Doc. Asociado SPA que requieren verificacion de bloqueo.
+      const aVerificar = documentos.filter((doc) =>
+        esReferenciaSpa(doc) && !(documentosInicialesClave && documentosInicialesClave.split(',').map(Number).includes(doc.id))
+      );
 
-          const bloqueo = await solicitudPagoApi.obtenerBloqueoDocumento(
-            sucursalBloqueo,
-            doc.id,
-            excluirSpaId
-          );
+      const resultados = await Promise.allSettled(
+        aVerificar.map((doc) =>
+          solicitudPagoApi.obtenerBloqueoDocumento(sucursalBloqueo, doc.id, excluirSpaId)
+        )
+      );
 
+      const nuevosBloqueos: Record<number, BloqueoInfo> = {};
+      let huboError = false;
+      let errorMensaje: string | null = null;
+
+      aVerificar.forEach((doc, indice) => {
+        const res = resultados[indice];
+        if (res.status === 'fulfilled') {
+          const bloqueo = res.value;
           if (bloqueo.bloqueado) {
             nuevosBloqueos[doc.id] = {
               bloqueado: true,
@@ -346,15 +394,69 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
               spaId: bloqueo.spaId!
             };
           }
+          return;
         }
-        setBloqueosMap(nuevosBloqueos);
-      } catch (err) {
-        console.error('Error al verificar bloqueos de SPA:', err);
+        // Fail-closed: si no se pudo verificar, el documento queda bloqueado porque en 6 de
+        // los 7 modulos el backend no revalida el bloqueo.
+        huboError = true;
+        if (!errorMensaje) {
+          errorMensaje = (res.reason as any)?.response?.data?.errorMessage ?? null;
+        }
+        nuevosBloqueos[doc.id] = {
+          bloqueado: true,
+          spaDocumento: 'No se pudo verificar el bloqueo de documentos asociados',
+          spaId: 0
+        };
+      });
+
+      if (cancelado) return;
+      setBloqueosMap(nuevosBloqueos);
+
+      if (huboError) {
+        message.error(
+          errorMensaje ||
+            'No se pudo verificar el bloqueo de documentos asociados. Esos documentos quedan bloqueados.'
+        );
+      }
+
+      // Purgar de la seleccion los documentos que quedaron bloqueados.
+      const bloqueados = selectedRowKeysRef.current.filter((k) => nuevosBloqueos[Number(k)]?.bloqueado);
+      if (bloqueados.length > 0) {
+        const removidos: string[] = [];
+        bloqueados.forEach((k) => {
+          const doc = documentos.find((d) => d.id === k);
+          const strKey = String(k);
+          if (!warnBloqueoRef.current.has(strKey)) {
+            warnBloqueoRef.current.add(strKey);
+            const info = nuevosBloqueos[Number(k)];
+            removidos.push(
+              info.spaId
+                ? `${obtenerCodigoCompleto(doc)} (solicitud ${info.spaDocumento})`
+                : obtenerCodigoCompleto(doc)
+            );
+          }
+        });
+        if (removidos.length > 0) {
+          message.warning(`Se quitaron documentos bloqueados: ${removidos.join(', ')}.`);
+        }
+
+        setSelectedRowKeys((prev) => prev.filter((k) => !nuevosBloqueos[Number(k)]?.bloqueado));
+        setMontosPorFila((prev) => {
+          const nuevos = { ...prev };
+          bloqueados.forEach((k) => {
+            nuevos[String(k)] = 0;
+          });
+          return nuevos;
+        });
       }
     };
 
     chequearBloqueos();
-  }, [open, documentos, transaccionId, excluirSpaId, sucursalBloqueo, documentosIniciales]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    return () => {
+      cancelado = true;
+    };
+  }, [open, documentos, excluirSpaId, sucursalBloqueo, documentosInicialesClave]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ===== Asignar montos automáticamente al seleccionar/deseleccionar filas =====
   const handleSelectionChange = (keys: React.Key[]) => {
@@ -363,10 +465,11 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
     const added = keys.filter((k) => !prevKeys.includes(k));
     const removed = prevKeys.filter((k) => !keys.includes(k));
 
-    // Filas con doc asociado no editable (replicar desktop GridView_SelectionChanged)
+    // Filas con doc asociado no editable (replicar desktop GridView_SelectionChanged).
+    // Una referencia SPA no bloquea: el bloqueo real lo decide bloqueosMap.
     const clavesConAsociado = new Set(keys.filter((k) => {
       const doc = documentos.find((d) => d.id === k);
-      return doc?.referencia && (!documentoEnviado || doc.referencia !== documentoEnviado);
+      return doc?.referencia && (!documentoEnviado || doc.referencia !== documentoEnviado) && !esReferenciaSpa(doc);
     }));
 
     // Filas bloqueadas por SPA sin pago generado → no permitir selección
@@ -375,8 +478,11 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       const doc = documentos.find((d) => d.id === k);
       if (!warnAsociadoRef.current.has(String(k))) {
         warnAsociadoRef.current.add(String(k));
+        const info = bloqueosMap[Number(k)];
         message.warning(
-          `El documento ${obtenerCodigoCompleto(doc)} ya está asociado a la solicitud ${bloqueosMap[Number(k)]?.spaDocumento} sin documento de pago generado. No se puede agregar.`
+          info?.spaId
+            ? `El documento ${obtenerCodigoCompleto(doc)} ya está asociado a la solicitud ${info.spaDocumento} sin documento de pago generado. No se puede agregar.`
+            : `No se pudo verificar el bloqueo del documento ${obtenerCodigoCompleto(doc)}. Vuelva a abrir el buscador o intente de nuevo.`
         );
       }
     });
@@ -469,8 +575,9 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
     // el resto → pendiente calculado en centavos.
     const limites = filas.map((id) => {
       const doc = documentos.find(d => d.id === id);
-      // Doc con asociado y no reasignable → no asignar monto (replicar desktop bAsignar_Click)
-      if (doc?.referencia && !esDocumentoInventario && (!documentoEnviado || doc.referencia !== documentoEnviado)) {
+      // Doc con asociado y no reasignable → no asignar monto (replicar desktop bAsignar_Click).
+      // Una referencia SPA no bloquea: el bloqueo real lo decide bloqueosMap.
+      if (doc?.referencia && !esDocumentoInventario && (!documentoEnviado || doc.referencia !== documentoEnviado) && !esReferenciaSpa(doc)) {
         return 0;
       }
       const pendienteReal = _obtenerPendienteReal(doc);

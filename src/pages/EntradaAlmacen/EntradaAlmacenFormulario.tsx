@@ -58,7 +58,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { DragHandle, SortableRow } from '../../components/DragSortable';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
-import { formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { formatNumber, formatNumber4, redondear4, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import { useDocumentoConfig } from '../../hooks/useDocumentoConfig';
@@ -83,7 +83,7 @@ const { Text } = Typography;
 
 function calcularFila(fila: DetalleEntradaAlmacenDTO): DetalleEntradaAlmacenDTO {
   const cantidad = fila.cantidad || 0;
-  const costo = fila.costo || 0;
+  const costo = redondear4(fila.costo || 0);
   const pctDesc = fila.porcentajeDescuento || 0;
   const pctImp = fila.impuesto?.porcentaje ?? (fila.porcentajeImpuesto || 0);
   const cantBonif = fila.cantidadBonificable || 0;
@@ -105,7 +105,7 @@ function calcularFila(fila: DetalleEntradaAlmacenDTO): DetalleEntradaAlmacenDTO 
 
   if (!ajustado && cantBonif > 0) {
     // Primera aplicación de bonificación: recalcular costo efectivo sobre cantidad total
-    costoCalculo = cantidadCalculo > 0 ? Math.round((subTotal / cantidadCalculo) * 100) / 100 : 0;
+    costoCalculo = cantidadCalculo > 0 ? redondear4(subTotal / cantidadCalculo) : 0;
     subTotal = Math.round(cantidadCalculo * costoCalculo * 100) / 100;
   } else {
     subTotal = Math.round(cantidadCalculo * costoCalculo * 100) / 100;
@@ -270,7 +270,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
           onOk: () => {
             const tasaNueva = Number(newValue) || 1;
             setDetalles((prev) =>
-              prev.map((d) => calcularFila({ ...d, costo: (d.costo || 0) / tasaNueva }))
+              prev.map((d) => calcularFila({ ...d, costo: redondear4((d.costo || 0) / tasaNueva) }))
             );
           },
         });
@@ -1341,7 +1341,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
               } else if (Number(detalleOC.medida?.factor || 1) !== Number(record.medida?.factor || 1)) {
                 motivo = `Factor OC: ${detalleOC.medida?.factor || 1} | ENP: ${record.medida?.factor || 1}`;
               } else if (Number(record.cantidadBonificable) === 0 && Math.abs(Number(detalleOC.costo) - Number(record.costo)) > 1) {
-                motivo = `Costo OC: ${formatNumber(detalleOC.costo)} | ENP: ${formatNumber(record.costo)}`;
+                motivo = `Costo OC: ${formatNumber4(detalleOC.costo)} | ENP: ${formatNumber4(record.costo)}`;
               }
               return (
                 <Tooltip title={motivo}>
@@ -1497,8 +1497,8 @@ const EntradaAlmacenFormulario: React.FC = () => {
                 style={{ width: '100%' }}
                 styles={{ input: { textAlign: 'right' } }}
                 min={0}
-                step={0.01}
-                precision={2}
+                step={0.0001}
+                precision={4}
                 controls={false}
                 value={fila.costo}
                 onChange={(val) => handleDetalleUpdateValue(fila.id, 'costo', val || 0)}
@@ -1506,16 +1506,16 @@ const EntradaAlmacenFormulario: React.FC = () => {
                 onPressEnter={() => handleDetalleCalculate(fila.id, 'costo', fila.costo || 0)}
               />
               <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999', marginTop: 'auto' }}>
-                {formatNumber(costoUnitario)} × {factor}
+                {formatNumber4(costoUnitario)} × {factor}
               </div>
             </div>
           );
         }
         return (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 4 }}>
-            <div style={{ textAlign: 'right', fontWeight: 500 }}>{formatNumber(costoBase)}</div>
+            <div style={{ textAlign: 'right', fontWeight: 500 }}>{formatNumber4(costoBase)}</div>
             <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999', marginTop: 'auto' }}>
-              {formatNumber(costoUnitario)} × {factor}
+              {formatNumber4(costoUnitario)} × {factor}
             </div>
           </div>
         );
@@ -2425,7 +2425,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
                                 width: 110,
                                 align: 'right',
                                 responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
-                                render: (_: any, record: any) => formatNumber(record.costo || 0),
+                                render: (_: any, record: any) => formatNumber4(record.costo || 0),
                               },
                               {
                                 title: 'Total',
@@ -2661,7 +2661,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
                               width: 110,
                               align: 'right',
                               responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
-                              render: (_: any, record: any) => formatNumber(record.costo || 0),
+                              render: (_: any, record: any) => formatNumber4(record.costo || 0),
                             },
                             {
                               title: 'Total',

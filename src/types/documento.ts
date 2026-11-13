@@ -17,6 +17,7 @@ export interface DocumentoDTO {
   preciosIncluyenImpuestos?: boolean;
   afectaInventario?: boolean;
   requiereAsiento?: boolean;
+  requiereContacto?: boolean;
   modificaPrecio?: boolean;
   modificaDescripcion?: boolean;
   trabajarEnUnidad?: boolean;

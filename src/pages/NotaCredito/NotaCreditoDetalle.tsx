@@ -696,6 +696,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
             icon: <SendOutlined />,
             loading: enviandoDGII,
             disabled: toEstadoNum(data?.estado) !== 1,
+            onClick: handleEnviarDGII,
             permiso: { codigoPantalla: codigoPantalla, permisoEspecial: 'pe_marcar_enviado' },
           }] : []),
           ...(!data?.ncf || !estadoDGII?.codigoQR ? [{
@@ -703,6 +704,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
             label: 'Reasignar NCF',
             icon: <FileTextOutlined />,
             disabled: toEstadoNum(data?.estado) !== 1,
+            onClick: handleReasignarNCF,
             permiso: { codigoPantalla: codigoPantalla, permisoEspecial: 'pe_preasignar_ncf' },
           }] : []),
           {
@@ -710,6 +712,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
             label: 'Recalcular',
             icon: <ReloadOutlined />,
             loading: recalculando,
+            onClick: handleRecalcular,
             permiso: { permisoEspecial: 'pe_recalcular' },
           },
         ] : undefined}

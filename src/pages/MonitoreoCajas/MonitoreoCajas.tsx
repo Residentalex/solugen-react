@@ -24,6 +24,7 @@ import {
   SearchOutlined,
   DatabaseOutlined,
   CreditCardOutlined,
+  UnorderedListOutlined,
 } from '@ant-design/icons';
 import { useMonitoreoStore } from '../../stores/monitoreoStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -462,8 +463,16 @@ const MonitoreoCajas: React.FC = () => {
         onClose={() => setDrawerOpen(false)}
         width={500}
         footer={
-          <Space style={{ float: 'right' }}>
+          <Space wrap style={{ float: 'right' }}>
             <Button
+              type="primary"
+              icon={<UnorderedListOutlined />}
+              onClick={() => drawerCaja && navigate(`/CCENTRALSUPERVISION/${drawerCaja.ip}`)}
+            >
+              Ver operaciones
+            </Button>
+            <Button
+              size="small"
               icon={<SyncOutlined />}
               onClick={() => {
                 setSyncModalOpen(true);
@@ -472,12 +481,14 @@ const MonitoreoCajas: React.FC = () => {
               Sincronizar
             </Button>
             <Button
+              size="small"
               icon={<PauseCircleOutlined />}
               onClick={handlePausar}
             >
               Pausar
             </Button>
             <Button
+              size="small"
               icon={<SettingOutlined />}
               onClick={() => {
                 setConfigModalOpen(true);

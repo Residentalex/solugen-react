@@ -70,6 +70,8 @@ export interface MovimientoBancarioDTO {
   esManual?: boolean;
   /** ID del registro en CONCIL_ARCHIVOS_IMPORTADOS (NULL si es manual) */
   archivoImportadoId?: number;
+  /** Origen de la conciliación: 'A' automática, 'M' manual, ''/null no conciliado o histórico sin dato */
+  origenConciliacion?: 'A' | 'M' | '' | null;
 }
 
 /** Ajuste de conciliación (AJUSTCON) */

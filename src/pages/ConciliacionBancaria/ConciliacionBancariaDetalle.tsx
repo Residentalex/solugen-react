@@ -18,6 +18,18 @@ import type { ConciliacionBancariaDTO, MovimientoBancarioDTO, TransaccionConcili
 
 const { Text } = Typography;
 
+// Indicador del origen de la conciliación de un movimiento. 'A' = automática (azul),
+// 'M' = manual (gris). Valor vacío (histórico o no conciliado) no muestra tag.
+const renderOrigenTag = (origen?: 'A' | 'M' | '' | null) => {
+  if (origen === 'A') {
+    return <Tag color="blue" style={{ marginInlineEnd: 0, fontSize: 11, lineHeight: '16px' }}>Automática</Tag>;
+  }
+  if (origen === 'M') {
+    return <Tag color="default" style={{ marginInlineEnd: 0, fontSize: 11, lineHeight: '16px' }}>Manual</Tag>;
+  }
+  return null;
+};
+
 const ConciliacionBancariaDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -619,9 +631,12 @@ const ConciliacionBancariaDetalle: React.FC = () => {
           ? entidad ? `Conciliado con: ${docConciliado} (${entidad})` : `Conciliado con: ${docConciliado}`
           : 'Conciliado';
         return (
-          <Tooltip title={tooltipContent}>
-            <CheckCircleFilled style={{ color: '#34c38f', fontSize: 16, cursor: 'pointer' }} />
-          </Tooltip>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+            <Tooltip title={tooltipContent}>
+              <CheckCircleFilled style={{ color: '#34c38f', fontSize: 16, cursor: 'pointer' }} />
+            </Tooltip>
+            {renderOrigenTag(record.origenConciliacion)}
+          </div>
         );
       },
     },

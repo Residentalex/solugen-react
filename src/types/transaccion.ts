@@ -101,6 +101,7 @@ export interface TransaccionDocumentoDTO {
   codigo: string;
   nombre?: string;
   origenCuenta?: number;
+  requiereContacto?: boolean;
 }
 
 export interface TransaccionEntidadDTO {

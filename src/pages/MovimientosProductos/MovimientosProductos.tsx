@@ -51,6 +51,7 @@ const TIPO_DOC_STYLE: Record<string, { color: string; label: string }> = {
 const ALL_COLUMNS_CONFIG: ColumnConfig[] = [
   { key: 'fecha', label: 'Fecha', defaultVisible: true },
   { key: 'documento', label: 'Documento', defaultVisible: true },
+  { key: 'codigo', label: 'Código', defaultVisible: true },
   { key: 'articulo', label: 'Artículo', defaultVisible: true },
   { key: 'familia', label: 'Familia', defaultVisible: true },
   { key: 'almacen', label: 'Almacén', defaultVisible: true },
@@ -135,7 +136,7 @@ function llaveGrupo(criterio: AgruparPor, d: MovimientoDTO): string {
     case 'fecha': return (d.fecha ?? '').slice(0, 8);
     case 'documento': return d.documento;
     case 'tipoDocumento': return d.tipoDocumento;
-    case 'producto': return d.codigo;
+    case 'producto': return `${d.codigo ?? ''}\u0000${d.familia ?? ''}`;
     case 'familia': return d.familia ?? '';
     case 'almacen': return d.almacen;
     case 'entidad': return d.entidad ?? '';
@@ -278,11 +279,66 @@ const MovimientosProductos: React.FC = () => {
 
   const handleExportarExcel = async () => {
     const companyName = await getCompanyName(sucursalActiva);
-    const conGrupo = agruparPor !== 'ninguno';
+
+    if (agruparPor !== 'ninguno') {
+      const etiqueta = AGRUPAR_OPTIONS.find((o) => o.value === agruparPor)?.label ?? '';
+
+      if (agruparPor === 'producto') {
+        const dataRows = filas.map((g) => [
+          g.codigo,
+          toTitleCase(g.articulo) || '-',
+          toTitleCase(g.familia) || '-',
+          g.cantidad ?? 0,
+          g.cantidad ? g.costo / g.cantidad : 0,
+          g.costo ?? 0,
+        ]);
+        dataRows.push([
+          'Totales',
+          '',
+          '',
+          totales.cantidad,
+          totales.cantidad ? totales.costo / totales.cantidad : 0,
+          totales.costo,
+        ]);
+        exportToExcel({
+          companyName,
+          extraHeaderRows: [[`Agrupado por: ${etiqueta}`]],
+          columnHeaders: ['Código', 'Artículo', 'Familia', 'Cantidad', 'Costo Unitario', 'Costo'],
+          dataRows,
+          sheetName: 'MovimientosProductos',
+          columnWidths: [{ wch: 14 }, { wch: 36 }, { wch: 20 }, { wch: 14 }, { wch: 16 }, { wch: 16 }],
+          numericColumns: [3, 4, 5],
+        });
+        return;
+      }
+
+      const dataRows = filas.map((g) => [
+        g.grupoEtiqueta ?? '',
+        g.cantidad ?? 0,
+        g.cantidad ? g.costo / g.cantidad : 0,
+        g.costo ?? 0,
+      ]);
+      dataRows.push([
+        'Totales',
+        totales.cantidad,
+        totales.cantidad ? totales.costo / totales.cantidad : 0,
+        totales.costo,
+      ]);
+      exportToExcel({
+        companyName,
+        extraHeaderRows: [[`Agrupado por: ${etiqueta}`]],
+        columnHeaders: ['Grupo', 'Cantidad', 'Costo Unitario', 'Costo'],
+        dataRows,
+        sheetName: 'MovimientosProductos',
+        columnWidths: [{ wch: 40 }, { wch: 14 }, { wch: 16 }, { wch: 16 }],
+        numericColumns: [1, 2, 3],
+      });
+      return;
+    }
+
     const columnHeaders = [
       'Fecha', 'Documento', 'Código', 'Artículo', 'Familia', 'Almacén',
       'Cantidad', 'Costo', 'Tipo Doc.', 'Entidad', 'Referencia/Concepto', 'Usuario', 'Costo Unitario',
-      ...(conGrupo ? ['Grupo'] : []),
     ];
     const dataRows = detalleFiltrado.map((r) => [
       formatDate(r.fecha),
@@ -298,7 +354,6 @@ const MovimientosProductos: React.FC = () => {
       r.referencia || '-',
       toTitleCase(r.usuario?.trim()) || '-',
       r.cantidad ? r.costo / r.cantidad : 0,
-      ...(conGrupo ? [etiquetaGrupo(agruparPor, r)] : []),
     ]);
     exportToExcel({
       companyName,
@@ -319,7 +374,6 @@ const MovimientosProductos: React.FC = () => {
         { wch: 22 },
         { wch: 16 },
         { wch: 14 },
-        ...(conGrupo ? [{ wch: 30 }] : []),
       ],
     });
   };
@@ -624,11 +678,24 @@ const MovimientosProductos: React.FC = () => {
     (val: any, record: FilaMovimiento): React.ReactNode => {
       if (!record.esGrupo) return renderNormal(val, record);
       if (colKey === primeraColumnaKey) {
+        if (agruparPor === 'producto') {
+          return (
+            <Text strong>
+              {record.codigo} ({record.grupoCantidad})
+            </Text>
+          );
+        }
         return (
           <Text strong>
             {record.grupoEtiqueta} ({record.grupoCantidad})
           </Text>
         );
+      }
+      if (agruparPor === 'producto' && colKey === 'articulo') {
+        return <Text strong>{toTitleCase(record.articulo) || '-'}</Text>;
+      }
+      if (agruparPor === 'producto' && colKey === 'familia') {
+        return <Text strong>{toTitleCase(record.familia) || '-'}</Text>;
       }
       return '';
     };
@@ -649,16 +716,19 @@ const MovimientosProductos: React.FC = () => {
       render: celdaConGrupo('documento', (doc: string) => <Text strong>{doc}</Text>),
     },
     {
+      title: 'Código',
+      dataIndex: 'codigo',
+      key: 'codigo',
+      width: 130,
+      render: celdaConGrupo('codigo', (val: string) => <Text strong>{val || '-'}</Text>),
+    },
+    {
       title: 'Artículo',
+      dataIndex: 'articulo',
       key: 'articulo',
-      width: 260,
+      width: 240,
       onCell: celdaWrap,
-      render: celdaConGrupo('articulo', (_: unknown, record: FilaMovimiento) => (
-        <Text>
-          <Text strong>{record.codigo}</Text>
-          {record.articulo ? <Text> - {toTitleCase(record.articulo)}</Text> : null}
-        </Text>
-      )),
+      render: celdaConGrupo('articulo', (val: string) => <Text>{toTitleCase(val) || '-'}</Text>),
     },
     {
       title: 'Familia',
@@ -775,7 +845,9 @@ const MovimientosProductos: React.FC = () => {
 
     if (agruparPor === 'ninguno') return visibles;
 
-    const COLS_VALOR = ['cantidad', 'costo', 'costoUnitario'];
+    const COLS_VALOR = agruparPor === 'producto'
+      ? ['articulo', 'cantidad', 'costo', 'costoUnitario']
+      : ['cantidad', 'costo', 'costoUnitario'];
     const fin = (() => {
       const i = visibles.findIndex((c) => COLS_VALOR.includes(c.key as string));
       return i === -1 ? visibles.length : i;

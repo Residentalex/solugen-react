@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Card, Button, Row, Col, Divider, Table,
   Form, Input, InputNumber,  DatePicker, Typography, Modal, Alert, App, Tabs,
@@ -54,11 +54,12 @@ const { Text } = Typography;
 const TransaccionBancariaFormulario: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s: any) => s.setPageTitleOverride);
-  const { data: { fechasCierre, fechasCierreInv } } = useCompanyStore();
+  const { data: { fechasCierre, fechasCierreInv, documentos } } = useCompanyStore();
   const { message } = App.useApp();
 
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
@@ -78,6 +79,10 @@ const TransaccionBancariaFormulario: React.FC = () => {
   const [entidadesCache, setEntidadesCache] = useState<EntidadDTO[]>([]);
   const [cuentasBancarias, setCuentasBancarias] = useState<CuentaBancariaDTO[]>([]);
   const [selectedCuenta, setSelectedCuenta] = useState<string>('');
+
+  // Cuenta bancaria recibida desde el listado FTransBanco (botón Nuevo)
+  const cuentaInicial = (location.state as any)?.cuentaCodigo as string | undefined;
+  const cuentaFijadaRef = useRef(false);
 
   // Concepto modal
   const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
@@ -145,6 +150,20 @@ const TransaccionBancariaFormulario: React.FC = () => {
   const tasaValue = Form.useWatch('tasa', form) ?? 1;
   const beneficiarioValue = Form.useWatch('beneficiario', form);
 
+  // ===== Documento efectivo para cargar los conceptos =====
+  // Los conceptos bancarios cuelgan de DOCCONCEPTO.CODDOC (por documento), no por tipo.
+  // En editar se usa el documento real del DTO; en crear, el tipo seleccionado.
+  const documentoConceptos = tipoValue || data?.documento?.codigo || documentCode;
+
+  // ===== ¿El documento exige el contacto (beneficiario)? =====
+  // ENTDOC.REQCONTACTO -> DocumentoDTO.RequiereContacto. En editar viene en el
+  // documento del DTO; en crear, del catalogo de documentos de la configuracion inicial.
+  const requiereContactoDocumento = useMemo(() => {
+    const docCodigo = data?.documento?.codigo || selectedConcepto?.docAGenerar || tipoValue;
+    const docConfig = docCodigo ? documentos?.find((d: any) => d.codigo === docCodigo) : undefined;
+    return Boolean(data?.documento?.requiereContacto ?? docConfig?.requiereContacto);
+  }, [data?.documento, selectedConcepto?.docAGenerar, tipoValue, documentos]);
+
   // ===== Moneda dinámica desde el concepto seleccionado =====
   const monedaSimbolo = selectedConcepto?.moneda?.simbolo || getMonedaSucursalActiva().simbolo;
   const monedaNombre = selectedConcepto?.moneda?.nombre || getMonedaSucursalActiva().nombre;
@@ -203,6 +222,21 @@ const TransaccionBancariaFormulario: React.FC = () => {
     }
   }, [sucursalActiva, message]);
 
+  // ===== Pre-selección de cuenta bancaria desde el listado (FTransBanco) =====
+  useEffect(() => {
+    if (mode !== 'crear') return;
+    if (!cuentaInicial || cuentaFijadaRef.current) return;
+    const existe = cuentasBancarias.some((c) => c.noCuenta === cuentaInicial);
+    if (!existe) return;
+    if (form.getFieldValue('cuentaBancaria')) return;
+    cuentaFijadaRef.current = true;
+    setSelectedCuenta(cuentaInicial);
+    form.setFieldsValue({ cuentaBancaria: cuentaInicial });
+  }, [mode, cuentaInicial, cuentasBancarias, form]);
+
+  // Cuenta fijada: solo en modo crear y cuando el listado pasó la cuenta activa
+  const cuentaFijada = mode === 'crear' && !!cuentaInicial && !!selectedCuenta && selectedCuenta === cuentaInicial;
+
   // ===== Cargar tipos de documento (mismo mecanismo que RDocAplicado) =====
   const cargarTiposDocumento = useCallback(async () => {
     setLoadingTipos(true);
@@ -219,37 +253,6 @@ const TransaccionBancariaFormulario: React.FC = () => {
       setLoadingTipos(false);
     }
   }, [sucursalActiva, message]);
-
-  // ===== Cargar pendientes cuando cambia la entidad =====
-  const cargarPendientesEntidad = useCallback(async (codEntidad: string) => {
-    if (!codEntidad) {
-      setDocumentosAsociados([]);
-      return;
-    }
-    const tipoEntidad = selectedEntidad?.tipoEntidad?.codigo || 'SUP';
-    try {
-      const { data: resp } = await apiClient.get(
-        `/Transaccion/${sucursalActiva}/pendiente/${codEntidad}`,
-        { params: { tipoEntidad } }
-      );
-      const docs = (resp?.data || []).map((d: any) => ({
-        id: d.id,
-        transaccionAsociadaID: d.id,
-        fecha: d.fechaDocumento ? dayjs(d.fechaDocumento).format('YYYY-MM-DD') : '',
-        documento: `${(d.documento?.codigo || d.tipoDocumento || '')}-${d.noDocumento || ''}`,
-        nCF: d.ncf || '',
-        montoOriginal: d.total || 0,
-        monto: d.total || 0,
-        descuento: 0,
-        retencion: d.retenciones ?? 0,
-        pagado: d.acreditado ?? d.debitado ?? 0,
-        pendiente: (d.total || 0) - (d.acreditado ?? d.debitado ?? 0),
-      }));
-      setDocumentosAsociados(docs);
-    } catch {
-      message.error('Error al cargar documentos pendientes');
-    }
-  }, [sucursalActiva, selectedEntidad?.tipoEntidad?.codigo, message]);
 
   // ===== Carga inicial =====
   useEffect(() => {
@@ -396,16 +399,6 @@ const TransaccionBancariaFormulario: React.FC = () => {
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate, cargarEntidades, message]);
 
-  // ===== Cargar documentos pendientes al seleccionar entidad (crear) =====
-  useEffect(() => {
-    if (mode !== 'crear') return;
-    if (selectedEntidad?.codigo) {
-      cargarPendientesEntidad(selectedEntidad.codigo);
-    } else {
-      setDocumentosAsociados([]);
-    }
-  }, [selectedEntidad?.codigo, mode, cargarPendientesEntidad]);
-
   // ===== Bloqueo de navegación con cambios sin guardar =====
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
@@ -491,6 +484,15 @@ const TransaccionBancariaFormulario: React.FC = () => {
     form.setFieldsValue({ concepto: '', entidad: undefined });
   };
 
+  // ===== Cambio de tipo de documento =====
+  const handleTipoChange = (val?: string) => {
+    setTipoValue(val || '');
+    if (selectedConcepto) {
+      handleConceptoClear();
+      message.info('Cambió el tipo de documento. Seleccione el concepto nuevamente.');
+    }
+  };
+
   // ===== Handlers de navegación =====
   const handleCancelar = () => {
     Modal.confirm({
@@ -513,20 +515,25 @@ const TransaccionBancariaFormulario: React.FC = () => {
 
   // ===== Validación =====
   const validarFormulario = (): string | null => {
+    if (mode === 'crear' && !tipoValue) return 'Debe seleccionar el Tipo Documento';
     if (!selectedConcepto) return 'Debe seleccionar un Concepto';
     
     const values = form.getFieldsValue();
     if (!values.cuentaBancaria) return 'Debe seleccionar una Cuenta Bancaria';
     if (subTotalValue < 0) return 'SubTotal no puede ser negativo';
 
-    const conceptoTieneEntidades = selectedConcepto.Entidades?.length > 0;
-    
-    if (conceptoTieneEntidades) {
-      // Concept works with entity types: need entity OR beneficiario
-      if (!selectedEntidad && !beneficiarioValue) return 'Debe seleccionar una Entidad o ingresar un Beneficiario';
-    } else {
-      // Concept does NOT work with entity types: entity not needed, but beneficiario is required
-      if (!beneficiarioValue) return 'Debe ingresar un Beneficiario';
+    // El contacto (beneficiario) solo se exige cuando el documento tiene
+    // activo ENTDOC.REQCONTACTO. Con la bandera apagada el campo queda opcional.
+    if (requiereContactoDocumento) {
+      const conceptoTieneEntidades = selectedConcepto.Entidades?.length > 0;
+
+      if (conceptoTieneEntidades) {
+        // Concept works with entity types: need entity OR beneficiario
+        if (!selectedEntidad && !beneficiarioValue) return 'Debe seleccionar una Entidad o ingresar un Beneficiario';
+      } else {
+        // Concept does NOT work with entity types: entity not needed, but beneficiario is required
+        if (!beneficiarioValue) return 'Debe ingresar un Beneficiario';
+      }
     }
 
     return null;
@@ -586,9 +593,13 @@ const TransaccionBancariaFormulario: React.FC = () => {
       if (data?.documento?.codigo) {
         (dto as any).tipoDocumento = data.documento.codigo;
       }
+    } else if (mode === 'crear') {
+      // El documento creado no debe quedar como 'AID' (enum por defecto del backend).
+      // Enviar el código de documento seleccionado; el backend usa JsonStringEnumConverter.
+      (dto as any).tipoDocumento = tipoValue;
     }
 
-    const docCodigo = data?.documento?.codigo || selectedConcepto?.docAGenerar || '';
+    const docCodigo = data?.documento?.codigo || selectedConcepto?.docAGenerar || tipoValue;
     const docConfig = docCodigo ? useCompanyStore.getState().data.documentos?.find((d: any) => d.codigo === docCodigo) : undefined;
     if (docCodigo) {
       dto.documento = {
@@ -612,9 +623,13 @@ const TransaccionBancariaFormulario: React.FC = () => {
     try {
       const dto = construirDTO();
       if (mode === 'crear') {
-        const idCreado = await transaccionBancariaApi.crearDocBancario(sucursalActiva, dto);
+        const { id: idCreado, warning } = await transaccionBancariaApi.crearDocBancario(sucursalActiva, dto);
         navigationConfirmedRef.current = true;
-        message.success('Transacción bancaria creada exitosamente');
+        if (warning) {
+          message.warning(warning);
+        } else {
+          message.success('Transacción bancaria creada exitosamente');
+        }
         navigate(`/FTransBanco/${idCreado}`, { replace: true });
       } else {
         await transaccionBancariaApi.actualizar(sucursalActiva, dto);
@@ -795,7 +810,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
                     optionFilterProp="label"
                     placeholder=" "
                     value={tipoValue || undefined}
-                    onChange={(val) => setTipoValue(val || '')}
+                    onChange={handleTipoChange}
                     loading={loadingTipos}
                     notFoundContent={!loadingTipos && tipoDocumentoOpciones.length === 0 ? 'No hay tipos disponibles' : undefined}
                   >
@@ -822,7 +837,13 @@ const TransaccionBancariaFormulario: React.FC = () => {
                   }
                   readOnly
                   suffix={<SearchOutlined style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />}
-                  onClick={() => setConceptoModalOpen(true)}
+                  onClick={() => {
+                    if (mode === 'crear' && !tipoValue) {
+                      message.info('Seleccione el Tipo Documento primero');
+                      return;
+                    }
+                    setConceptoModalOpen(true);
+                  }}
                 />
               </FloatingField>
             </div>
@@ -866,7 +887,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
                     const ent = entidadesCache.find((e: any) => e.codigo === val);
                     setSelectedEntidad(ent || null);
                   }}
-                  onDropdownVisibleChange={(open) => {
+                  onOpenChange={(open) => {
                     if (open && !selectedConcepto) {
                       message.info('Seleccione un concepto primero');
                     }
@@ -903,6 +924,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
                     placeholder="Seleccione una cuenta bancaria"
                     value={selectedCuenta || undefined}
                     onChange={(val) => setSelectedCuenta(val || '')}
+                    disabled={cuentaFijada}
                     notFoundContent={cuentasBancarias.length === 0 ? 'No hay cuentas disponibles' : undefined}
                   >
                     {cuentasBancarias.map((cta) => (
@@ -919,7 +941,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
 
           <Col xs={24} sm={12}>
             <Form.Item name="beneficiario" style={{ marginBottom: 0 }}>
-              <FloatingField label="Beneficiario">
+              <FloatingField label="Beneficiario" required={requiereContactoDocumento}>
                 <Input placeholder="Nombre del beneficiario" />
               </FloatingField>
             </Form.Item>
@@ -1026,7 +1048,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
         onClose={() => setConceptoModalOpen(false)}
         onSelect={handleConceptoSelect}
         sucursal={sucursalActiva}
-        documento={documentCode}
+        documento={documentoConceptos}
       />
 
       <BuscarDocumentoModal
@@ -1036,9 +1058,8 @@ const TransaccionBancariaFormulario: React.FC = () => {
         tipoEntidad={(selectedEntidad?.tipoEntidad?.codigo as 'SUP' | 'CLI') || 'SUP'}
         codEntidad={selectedEntidad?.codigo || ''}
         origen={(() => { 
-          const { documentos } = useCompanyStore.getState().data; 
-          const docCodigo = selectedConcepto?.docAGenerar || data?.documento?.codigo || ''; 
-          const docConfig = docCodigo ? documentos.find((d: any) => d.codigo === docCodigo) : undefined; 
+          const docCodigo = selectedConcepto?.docAGenerar || data?.documento?.codigo || tipoValue || ''; 
+          const docConfig = docCodigo ? documentos?.find((d: any) => d.codigo === docCodigo) : undefined; 
           const docOrigen = docConfig?.origenCuenta ?? OrigenCuenta.Desconocido; 
           return typeof docOrigen === 'number' ? docOrigen : (docOrigen === 'Credito' ? OrigenCuenta.Credito : OrigenCuenta.Debito); 
         })()}

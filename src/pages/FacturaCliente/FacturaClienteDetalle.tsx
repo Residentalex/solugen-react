@@ -786,6 +786,7 @@ const FacturaClienteDetalle: React.FC = () => {
             icon: <SendOutlined />,
             loading: enviandoDGII,
             disabled: toEstadoNum(documentoActivo.estado) !== 1,
+            onClick: handleEnviarDGII,
             permiso: { codigoPantalla: 'FFAC', permisoEspecial: 'pe_marcar_enviado' },
           }] : []),
           {
@@ -793,6 +794,7 @@ const FacturaClienteDetalle: React.FC = () => {
             label: 'Reasignar NCF',
             icon: <FileTextOutlined />,
             disabled: toEstadoNum(documentoActivo.estado) !== 1,
+            onClick: handleReasignarNCF,
             permiso: { codigoPantalla: 'FFAC', permisoEspecial: 'pe_preasignar_ncf' },
           },
           ...(!data?.transaccionesAsociadas?.some(t => t.tipoDocumento === 'NC' || (t.documento && t.documento.startsWith('NC-'))) ? [{
@@ -800,6 +802,7 @@ const FacturaClienteDetalle: React.FC = () => {
             label: 'Nota Crédito',
             icon: <FileTextOutlined />,
             disabled: toEstadoNum(documentoActivo.estado) !== 1,
+            onClick: () => setModalNCCLIAbierto(true),
             permiso: { codigoPantalla: 'FFAC', permisoEspecial: 'pe_generar_nccli' },
           }] : []),
         ] : undefined}

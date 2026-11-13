@@ -529,7 +529,7 @@ const FTransBanco: React.FC = () => {
               pageSize={pageSize}
               onPageSizeChange={handlePageSizeChange}
               showCrear
-              onCrear={() => navigate('/FTransBanco/nuevo')}
+              onCrear={() => navigate('/FTransBanco/nuevo', { state: { cuentaCodigo: cuentaActiva?.noCuenta } })}
               onRefresh={handleRefresh}
             />
             <div style={{ marginBottom: 8 }}>

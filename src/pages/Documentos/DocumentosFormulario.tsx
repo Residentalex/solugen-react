@@ -104,6 +104,7 @@ const DocumentosFormulario: React.FC = () => {
   const [preciosConImpuestos, setPreciosConImpuestos] = useState(false);
   const [afectaInventario, setAfectaInventario] = useState(true);
   const [requiereAsiento, setRequiereAsiento] = useState(true);
+  const [requiereContacto, setRequiereContacto] = useState(false);
   const [modPrecio, setModPrecio] = useState(false);
   const [modDescripcion, setModDescripcion] = useState(true);
   const [trabajarEnUnidad, setTrabajarEnUnidad] = useState(false);
@@ -146,6 +147,7 @@ const DocumentosFormulario: React.FC = () => {
         setPreciosConImpuestos(doc.preciosIncluyenImpuestos ?? false);
         setAfectaInventario(doc.afectaInventario ?? true);
         setRequiereAsiento(doc.requiereAsiento ?? true);
+        setRequiereContacto(doc.requiereContacto ?? false);
         setModPrecio(doc.modificaPrecio ?? false);
         setModDescripcion(doc.modificaDescripcion ?? true);
         setTrabajarEnUnidad(doc.trabajarEnUnidad ?? false);
@@ -243,6 +245,7 @@ const DocumentosFormulario: React.FC = () => {
         preciosIncluyenImpuestos: preciosConImpuestos,
         afectaInventario,
         requiereAsiento,
+        requiereContacto,
         modificaPrecio: modPrecio,
         modificaDescripcion: modDescripcion,
         trabajarEnUnidad,
@@ -866,6 +869,12 @@ const DocumentosFormulario: React.FC = () => {
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Requiere asiento</Text>
                     <Switch checked={requiereAsiento} onChange={setRequiereAsiento} disabled={guardado || saving} />
+                  </div>
+              </Col>
+              <Col xs={12}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Requiere campo de Contacto</Text>
+                    <Switch checked={requiereContacto} onChange={setRequiereContacto} disabled={guardado || saving} />
                   </div>
               </Col>
             </Row>

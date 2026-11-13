@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Button, Space, Row, Col, Grid, Form, Input, InputNumber,  DatePicker, Typography, message, Modal, Alert, Spin, Skeleton, Upload, Divider, Checkbox, Descriptions, Steps,
+  Card, Table, Tabs, Button, Space, Row, Col, Grid, Form, Input, InputNumber,  DatePicker, Typography, message, Modal, Alert, Spin, Skeleton, Upload, Divider, Checkbox, Descriptions, Steps, Tag,
 } from 'antd';
 import { Select } from '../../components/Select';
 import {
@@ -39,25 +39,37 @@ const TIPOS_DOC_BANCARIO = [
   { codigo: 'VD', nombre: 'Venta de Divisas' },
 ];
 
-const normalizarFechaMatching = (valor: string): string => {
-  const texto = (valor || '').trim();
-  if (!texto) return '';
+// Clave de auto-conciliación: referencia normalizada (trim, mayúsculas, colapso de espacios
+// internos y sin ceros a la izquierda) + monto exacto a 2 decimales + signo débito/crédito.
+// No incluye fecha: la conciliación automática exige que coincidan referencia y monto.
+// El signo es un discriminante adicional para no cruzar un débito contra un crédito.
+const obtenerClaveReferenciaMonto = (referencia: string, monto: number, debCred: string): string => {
+  const referenciaNormalizada = (referencia || '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, ' ')
+    .replace(/^0+/, '');
+  if (!referenciaNormalizada) return '';
 
-  const iso = texto.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const montoNormalizado = Number(monto);
+  if (!Number.isFinite(montoNormalizado)) return '';
 
-  const diaMesAnio = texto.match(/^(\d{2})[\/-](\d{2})[\/-](\d{4})/);
-  if (diaMesAnio) return `${diaMesAnio[3]}-${diaMesAnio[2]}-${diaMesAnio[1]}`;
+  const signo = (debCred || '').trim().toUpperCase();
+  if (signo !== 'D' && signo !== 'C') return '';
 
-  const fecha = dayjs(texto);
-  return fecha.isValid() ? fecha.format('YYYY-MM-DD') : '';
+  return `${referenciaNormalizada}|${montoNormalizado.toFixed(2)}|${signo}`;
 };
 
-const obtenerClaveMatching = (referencia: string, fecha: string, monto: number): string => {
-  const referenciaNormalizada = (referencia || '').trim().replace(/^0+/, '');
-  const fechaNormalizada = normalizarFechaMatching(fecha);
-  if (!referenciaNormalizada || !fechaNormalizada) return '';
-  return `${referenciaNormalizada}|${fechaNormalizada}|${Number(monto).toFixed(2)}`;
+// Indicador del origen de la conciliación de un movimiento. 'A' = automática (azul),
+// 'M' = manual (gris). Valor vacío (histórico o no conciliado) no muestra tag.
+const renderOrigenTag = (origen?: 'A' | 'M' | '' | null) => {
+  if (origen === 'A') {
+    return <Tag color="blue" style={{ marginInlineEnd: 0, fontSize: 11, lineHeight: '16px' }}>Automática</Tag>;
+  }
+  if (origen === 'M') {
+    return <Tag color="default" style={{ marginInlineEnd: 0, fontSize: 11, lineHeight: '16px' }}>Manual</Tag>;
+  }
+  return null;
 };
 
 const ConciliacionBancariaFormulario: React.FC = () => {
@@ -119,6 +131,9 @@ const ConciliacionBancariaFormulario: React.FC = () => {
   // en divisa se precarga con MONEDAS.TASA y el usuario puede ajustarla antes de crear.
   const [tasaDocSeleccionada, setTasaDocSeleccionada] = useState<number>(1);
   const [creandoDoc, setCreandoDoc] = useState(false);
+  // Guard de reentrada síncrono: evita disparar dos POST con doble clic antes de que
+  // React re-renderice el estado `creandoDoc`.
+  const creandoDocRef = useRef(false);
   const [entidadSeleccionada, setEntidadSeleccionada] = useState<{ codigo: string; nombre: string; identificacion?: string; activo?: boolean } | null>(null);
   const [entidadesCache, setEntidadesCache] = useState<{ codigo: string; nombre: string; identificacion?: string; activo?: boolean }[]>([]);
   // Filtros tipo Excel
@@ -580,6 +595,7 @@ const balLibrosInicialCargado = useRef(false);
           numDocConciliado: undefined,
           nombreTipoDocConciliado: undefined,
           entidadConciliada: undefined,
+          origenConciliacion: '',
         };
       }
 
@@ -652,6 +668,7 @@ const balLibrosInicialCargado = useRef(false);
           concepto: parts[5] || '',
           cotejado: false,
           referencia,
+          origenConciliacion: '',
         };
       }
       return {
@@ -664,6 +681,7 @@ const balLibrosInicialCargado = useRef(false);
         concepto: parts[4] || '',
         cotejado: false,
         referencia: '',
+        origenConciliacion: '',
       };
     });
   };
@@ -960,7 +978,7 @@ const balLibrosInicialCargado = useRef(false);
       if (mov.cotejado && (mov.numRef || mov.concepto || mov.ctaBanc)) {
         return prev.map((m) =>
           m.orden === orden
-            ? { ...m, cotejado: false, documento: '', tipoDoc: '', nombreTipoDoc: '', entidad: '', transacIdConciliado: undefined, tipoDocConciliado: undefined, numDocConciliado: undefined }
+            ? { ...m, cotejado: false, documento: '', tipoDoc: '', nombreTipoDoc: '', entidad: '', transacIdConciliado: undefined, tipoDocConciliado: undefined, numDocConciliado: undefined, origenConciliacion: '' }
             : m
         );
       }
@@ -1003,7 +1021,7 @@ const balLibrosInicialCargado = useRef(false);
         if (mov.cotejado && (mov.numRef || mov.concepto || mov.ctaBanc)) {
           next = next.map((m) =>
             m.orden === orden
-              ? { ...m, cotejado: false, documento: '', tipoDoc: '', nombreTipoDoc: '', entidad: '', transacIdConciliado: undefined, tipoDocConciliado: undefined, numDocConciliado: undefined }
+              ? { ...m, cotejado: false, documento: '', tipoDoc: '', nombreTipoDoc: '', entidad: '', transacIdConciliado: undefined, tipoDocConciliado: undefined, numDocConciliado: undefined, origenConciliacion: '' }
               : m
           );
         } else {
@@ -1036,6 +1054,7 @@ const balLibrosInicialCargado = useRef(false);
             transacIdConciliado: candidato.transacId,
             tipoDocConciliado: candidato.tipoDoc,
             numDocConciliado: candidato.numDoc,
+            origenConciliacion: 'M',
           }
         : m
     ));
@@ -1054,7 +1073,8 @@ const balLibrosInicialCargado = useRef(false);
     seleccionAuto.forEach((orden) => {
       const mov = movimientosActualizados.find((m) => m.orden === orden);
       if (!mov) return;
-      const candidatos = candidatosPorMonto.get(mov.monto) || [];
+      if (mov.cotejado) return;
+      const candidatos = candidatosPorReferenciaMonto.get(obtenerClaveReferenciaMonto(mov.numRef, mov.monto, mov.debCred)) || [];
       if (candidatos.length !== 1) return;
       const candidato = candidatos[0];
       if (transaccionEstaConciliada(candidato, movimientosActualizados, mov.orden)) return;
@@ -1071,6 +1091,7 @@ const balLibrosInicialCargado = useRef(false);
               transacIdConciliado: candidato.transacId,
               tipoDocConciliado: candidato.tipoDoc,
               numDocConciliado: candidato.numDoc,
+              origenConciliacion: 'A',
             }
           : m
       );
@@ -1132,6 +1153,7 @@ const balLibrosInicialCargado = useRef(false);
 
   // Crea un documento bancario aplicado y posteado desde un movimiento importado.
   const handleCrearDocBancario = async () => {
+    if (creandoDocRef.current) return;
     if (!modalCrearDoc || !tipoDocSeleccionado || !fechaDocSeleccionada || !conceptoSeleccionado || !entidadSeleccionada || !numeroCtaForm) {
       message.warning('Complete todos los campos para crear el documento, incluyendo la cuenta bancaria');
       return;
@@ -1142,6 +1164,7 @@ const balLibrosInicialCargado = useRef(false);
       message.warning(`Ingrese la tasa de cambio para la moneda ${etiquetaMoneda(monedaConciliacionCodigo)}`);
       return;
     }
+    creandoDocRef.current = true;
     setCreandoDoc(true);
     try {
       const dto = {
@@ -1162,34 +1185,80 @@ const balLibrosInicialCargado = useRef(false);
         descuento: 0,
         impuestos: 0,
       };
-      const nuevoId = await transaccionBancariaApi.crearDocBancario(sucursalActiva, dto, true);
-      // Obtener el documento para usar el numero real generado por el backend
-      const docCreado = await transaccionBancariaApi.obtenerPorId(sucursalActiva, nuevoId);
-      const noDocumentoReal = docCreado.noDocumento;
-      const documentoCompleto = `${tipoDocSeleccionado}-${noDocumentoReal}`;
-      const entidadNombre = entidadSeleccionada.nombre;
-      // Abrir nueva pestaña con el documento creado
-      window.open(`/FTransBanco/${nuevoId}`, '_blank');
-      // Marcar movimiento como conciliado y agregar documento creado a movimientos
+      let { id: nuevoId, warning } = await transaccionBancariaApi.crearDocBancario(sucursalActiva, dto, true);
+
+      // Si el backend devuelve un warning, ya existe un documento equivalente (misma cuenta,
+      // fecha, referencia, monto y concepto). La decisión de reutilizarlo o crear uno nuevo
+      // es del usuario, por eso se le pregunta antes de continuar.
+      if (warning) {
+        const usarExistente = await new Promise<boolean>((resolve) => {
+          Modal.confirm({
+            title: 'Documento existente',
+            icon: <ExclamationCircleOutlined />,
+            content: `${warning}\n\nYa existe un documento con la misma cuenta, fecha, referencia, monto y concepto.`,
+            okText: 'Usar el existente',
+            cancelText: 'Crear uno nuevo',
+            onOk: () => resolve(true),
+            onCancel: () => resolve(false),
+          });
+        });
+        if (!usarExistente) {
+          // El usuario quiere crear un documento nuevo: repetir la llamada forzando la
+          // creación. El guard creandoDocRef sigue en true durante todo el flujo, así que
+          // no se abre la puerta a un doble clic real.
+          const res = await transaccionBancariaApi.crearDocBancario(sucursalActiva, dto, true, true);
+          nuevoId = res.id;
+          warning = res.warning;
+        }
+      }
+
+      // La creacion fue exitosa (o el backend reutilizo un documento equivalente): cerrar
+      // el modal de inmediato para no invitar a reintentar sobre un documento ya existente.
+      setModalCrearDoc(null);
+
+      // Post-proceso aislado: obtener el numero real generado por el backend y abrir la
+      // pestaña del documento. Si esto falla, la creacion ya fue exitosa: solo advertimos.
+      let documentoCompleto = '';
+      try {
+        const docCreado = await transaccionBancariaApi.obtenerPorId(sucursalActiva, nuevoId);
+        documentoCompleto = `${tipoDocSeleccionado}-${docCreado.noDocumento}`;
+        // Abrir nueva pestaña con el documento creado
+        window.open(`/FTransBanco/${nuevoId}`, '_blank');
+      } catch (err: any) {
+        message.warning('El documento se creó, pero no se pudo obtener su número para mostrarlo');
+      }
+
+      // Marcar movimiento como conciliado y agregar documento creado a movimientos.
+      // Sin el numero real queda cotejado sin `documento`.
       const tipoInfo = TIPOS_DOC_BANCARIO.find(t => t.codigo === tipoDocSeleccionado);
+      const entidadNombre = entidadSeleccionada.nombre;
       setMovimientos(prev => prev.map(m =>
         m.orden === modalCrearDoc.orden
           ? {
               ...m,
               cotejado: true,
-              documento: documentoCompleto,
+              ...(documentoCompleto ? { documento: documentoCompleto } : {}),
               tipoDoc: tipoDocSeleccionado,
               nombreTipoDoc: tipoInfo?.nombre || '',
               entidad: entidadNombre,
+              origenConciliacion: 'M',
             }
           : m
       ));
-      message.success(`Documento ${documentoCompleto} creado y conciliado`);
-      setModalCrearDoc(null);
+
+      if (warning) {
+        // El backend reutilizo un documento existente equivalente en lugar de crear uno nuevo.
+        message.info(warning);
+      } else {
+        message.success(documentoCompleto
+          ? `Documento ${documentoCompleto} creado y conciliado`
+          : 'Documento creado y conciliado');
+      }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al crear documento bancario');
       message.error(msg);
     } finally {
+      creandoDocRef.current = false;
       setCreandoDoc(false);
     }
   };
@@ -1221,6 +1290,7 @@ const balLibrosInicialCargado = useRef(false);
         transacIdConciliado: t.transacId,
         tipoDocConciliado: t.tipoDoc,
         numDocConciliado: t.numDoc,
+        origenConciliacion: 'M',
       };
       return [...prev, nuevo];
     });
@@ -1504,52 +1574,59 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
     return map;
   }, [transaccionesEnTransito]);
 
-  // Índice de candidatos exactos (fecha calendario + monto + referencia) para la conciliación automática.
-  const candidatosPorClave = useMemo(() => {
+  // Índice de candidatos para auto-conciliación: referencia (NUM_DOC o DOC_REF) + monto exacto + signo.
+  // Cada transacción se indexa bajo sus dos referencias normalizadas, de modo que coincida si
+  // cualquiera de las dos (numDoc o referencia) es igual al NUMREF del movimiento.
+  // La parte DOC_REF (t.referencia) solo opera cuando el backend la envía en TransaccionConciliadaDTO;
+  // hoy puede venir vacía, en cuyo caso solo queda indexada por numDoc.
+  const candidatosPorReferenciaMonto = useMemo(() => {
     const map = new Map<string, TransaccionConciliadaDTO[]>();
-    transaccionesEnTransito.forEach((t) => {
-      const clave = obtenerClaveMatching(t.numDoc, t.fecha, t.monto);
+    const agregar = (clave: string, t: TransaccionConciliadaDTO) => {
       if (!clave) return;
       const arr = map.get(clave) || [];
       arr.push(t);
       map.set(clave, arr);
+    };
+    transaccionesEnTransito.forEach((t) => {
+      const claveNumDoc = obtenerClaveReferenciaMonto(t.numDoc, t.monto, t.debCred);
+      const claveReferencia = obtenerClaveReferenciaMonto(t.referencia || '', t.monto, t.debCred);
+      agregar(claveNumDoc, t);
+      if (claveReferencia && claveReferencia !== claveNumDoc) {
+        agregar(claveReferencia, t);
+      }
     });
     return map;
   }, [transaccionesEnTransito]);
 
-  // Movimientos sin conciliar con EXACTAMENTE 1 documento candidato exacto.
-  const movimientosUnSoloCandidato = useMemo(() => {
-    return movimientos.filter((m) => {
-      if (m.cotejado) return false;
-      const candidatos = candidatosPorClave.get(obtenerClaveMatching(m.numRef, m.fecha, m.monto)) || [];
-      return candidatos.length === 1;
-    });
-  }, [movimientos, candidatosPorClave]);
-
-  // Verifica si TODOS los movimientos seleccionados tienen exactamente 1 candidato por MONTO exacto
-  // Y que los candidatos no se repitan entre los movimientos seleccionados.
+  // Verifica si TODOS los movimientos seleccionados tienen exactamente 1 candidato por
+  // referencia + monto exacto (sin fecha), que la referencia no esté vacía y que los candidatos
+  // (transacId) no se repitan entre los movimientos seleccionados.
   const puedeAutoConciliar = useMemo(() => {
     if (seleccionAuto.length === 0) return false;
-    
-    // Verificar que cada movimiento tenga exactamente 1 candidato
+
+    // Cada movimiento debe tener exactamente 1 candidato por referencia + monto.
     const allHaveOne = seleccionAuto.every((orden) => {
       const mov = movimientos.find((m) => m.orden === orden);
       if (!mov) return false;
-      const candidatos = candidatosPorMonto.get(mov.monto) || [];
+      if (mov.cotejado) return false;
+      const clave = obtenerClaveReferenciaMonto(mov.numRef, mov.monto, mov.debCred);
+      if (!clave) return false; // numRef vacío o normalizado vacío
+      const candidatos = candidatosPorReferenciaMonto.get(clave) || [];
       return candidatos.length === 1;
     });
     if (!allHaveOne) return false;
-    
+
     // Cada transacción contable solo puede asignarse una vez en el mismo lote.
     const transacIdsSeleccionados = seleccionAuto.map((orden) => {
       const mov = movimientos.find((m) => m.orden === orden);
       if (!mov) return null;
-      const candidatos = candidatosPorMonto.get(mov.monto) || [];
+      const clave = obtenerClaveReferenciaMonto(mov.numRef, mov.monto, mov.debCred);
+      const candidatos = candidatosPorReferenciaMonto.get(clave) || [];
       return obtenerTransacIdValido(candidatos[0]?.transacId);
     });
     if (transacIdsSeleccionados.some((transacId) => transacId === null)) return false;
     return new Set(transacIdsSeleccionados).size === transacIdsSeleccionados.length;
-  }, [seleccionAuto, movimientos, candidatosPorMonto]);
+  }, [seleccionAuto, movimientos, candidatosPorReferenciaMonto]);
 
   // Candidatos visibles en el modal abierto (mismo monto; selección manual).
   const candidatosModal = useMemo(() => {
@@ -1918,8 +1995,11 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
         // Movimientos cotejados: documento + check verde.
         if (record.cotejado) {
           return (
-            <Space size={6}>
-              <Text>{val || '-'}</Text>
+            <Space size={6} align="start">
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+                <Text>{val || '-'}</Text>
+                {renderOrigenTag(record.origenConciliacion)}
+              </div>
               <CheckCircleFilled style={{ color: '#52c41a', fontSize: 14 }} />
             </Space>
           );

@@ -218,10 +218,12 @@ const ConfigPedidosYa = React.lazy(() => import('./pages/ConfigPedidosYa/ConfigP
 const ReportesModulo = React.lazy(() => import('./pages/ReportesModulo/ReportesModulo'));
 const VisanetTest = React.lazy(() => import('./pages/VisanetTest/VisanetTest'));
 const MonitoreoCajas = React.lazy(() => import('./pages/MonitoreoCajas/MonitoreoCajas'));
+const CajaOperacionesVivo = React.lazy(() => import('./pages/MonitoreoCajas/CajaOperacionesVivo'));
 const ReportesConfig = React.lazy(() => import('./pages/ReportesConfig/ReportesConfig'));
 const ChatPage = React.lazy(() => import('./pages/Chat/ChatPage'));
 const ActividadesPage = React.lazy(() => import('./pages/Actividades/ActividadesPage'));
 const ServiciosActividadPage = React.lazy(() => import('./pages/Actividades/ServiciosActividadPage'));
+const Actualizacion = React.lazy(() => import('./pages/Actualizacion/Actualizacion'));
 
 // Pantalla de carga mientras se descarga el chunk de la pagina (React.lazy).
 const PageLoading: React.FC = () => (
@@ -442,6 +444,7 @@ const App: React.FC = () => {
             <Route path="FTarifas" element={<Proximamente modulo="Tarifas" codigo="FTarifas" />} />
             <Route path="CCUADRECAJA" element={<Proximamente modulo="Cuadre de Caja" codigo="CCUADRECAJA" />} />
             <Route path="CCENTRALSUPERVISION" element={<MonitoreoCajas />} />
+            <Route path="CCENTRALSUPERVISION/:ip" element={<CajaOperacionesVivo />} />
             <Route path="MPlanPago" element={<PlanesPago />} />
             <Route path="FORC" element={<OrdenCompra />} />
             <Route path="FORC/nuevo" element={<OrdenCompraFormulario />} />
@@ -557,6 +560,7 @@ const App: React.FC = () => {
           <Route path="OConfig" element={<Empresa />} />
           <Route path="reportesconfig" element={<ReportesConfig />} />
           <Route path="MConfigPedidosYa" element={<ConfigPedidosYa />} />
+          <Route path="mActualizacion" element={<Actualizacion />} />
           <Route path="MTerminal" element={<Proximamente modulo="Terminales" codigo="MTerminal" />} />
            <Route path="MSincronizacion" element={<Proximamente modulo="SincronizaciÃ³n" codigo="MSincronizacion" />} />
             <Route path="MApiToken" element={<ApiTokens />} />
@@ -726,6 +730,7 @@ const App: React.FC = () => {
             <Route path="FTarifas" element={<Proximamente modulo="Tarifas" codigo="FTarifas" />} />
             <Route path="CCUADRECAJA" element={<Proximamente modulo="Cuadre de Caja" codigo="CCUADRECAJA" />} />
             <Route path="CCENTRALSUPERVISION" element={<MonitoreoCajas />} />
+            <Route path="CCENTRALSUPERVISION/:ip" element={<CajaOperacionesVivo />} />
             <Route path="MPlanPago" element={<PlanesPago />} />
             <Route path="FORC" element={<OrdenCompra />} />
             <Route path="FORC/nuevo" element={<OrdenCompraFormulario />} />
@@ -839,6 +844,7 @@ const App: React.FC = () => {
           <Route path="OConfig" element={<Empresa />} />
           <Route path="reportesconfig" element={<ReportesConfig />} />
           <Route path="MConfigPedidosYa" element={<ConfigPedidosYa />} />
+          <Route path="mActualizacion" element={<Actualizacion />} />
           <Route path="MTerminal" element={<Proximamente modulo="Terminales" codigo="MTerminal" />} />
            <Route path="MSincronizacion" element={<Proximamente modulo="SincronizaciÃ³n" codigo="MSincronizacion" />} />
             <Route path="MApiToken" element={<ApiTokens />} />
