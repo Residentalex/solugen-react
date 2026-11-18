@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Card, Button, Row, Col, Divider, Table,
-  Form, Input, InputNumber,  DatePicker, Typography, Modal, Alert, App, Tabs,
+  Form, Input, InputNumber,  DatePicker, Typography, Modal, Alert, App, Tabs, Dropdown,
 } from 'antd';
 import { Select } from '../../components/Select';
 import {
@@ -17,6 +17,8 @@ import {
   DeleteOutlined,
   HistoryOutlined,
   FileTextOutlined,
+  PrinterOutlined,
+  EyeOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -47,6 +49,8 @@ import { toTitleCase, extraerMensajeError, toISOFormat, formatNumber, redondear2
 import { toEstadoNum } from '../../utils/estadoDocumento';
 import MemoField from '../../components/MemoField/MemoField';
 import CamposRapidosFila from '../../components/CamposRapidosFila/CamposRapidosFila';
+import { reporteChequePopularApi } from '../../api/reporteChequePopularApi';
+import type { ReporteChequePopularDTO } from '../../types/reporteChequePopular';
 
 const { Text } = Typography;
 
@@ -72,6 +76,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [generandoCheque, setGenerandoCheque] = useState(false);
   const [data, setData] = useState<TransaccionDTO | null>(null);
   const [tipoValue, setTipoValue] = useState<string>('');
   const [selectedConcepto, setSelectedConcepto] = useState<ConceptoDTO | null>(null);
@@ -776,6 +781,137 @@ const TransaccionBancariaFormulario: React.FC = () => {
     });
   }, []);
 
+  // ===== Cheque de Banco Popular =====
+  // El formato de cheque Popular solo aplica a documentos de tipo Cheque (CHK) cuya
+  // cuenta bancaria pertenezca al Banco Popular. Los demas bancos y tipos conservan el flujo actual.
+  const cuentaSeleccionada = useMemo(
+    () => cuentasBancarias.find((c) => c.noCuenta === selectedCuenta),
+    [cuentasBancarias, selectedCuenta]
+  );
+
+  const esChequePopular = useMemo(() => {
+    const esTipoCheque = tipoValue.trim().toUpperCase() === 'CHK';
+    const codigoBanco = cuentaSeleccionada?.codigoBanco?.trim();
+    const banco = (cuentaSeleccionada?.banco || '').toUpperCase();
+    return esTipoCheque && (codigoBanco === '001' || banco.includes('POPULAR'));
+  }, [tipoValue, cuentaSeleccionada]);
+
+  /** Arma el DTO del reporte con los valores actuales del formulario. */
+  const construirPayloadCheque = (
+    documento: TransaccionDTO | null,
+    noDocumento: string
+  ): ReporteChequePopularDTO => {
+    const values = form.getFieldsValue();
+    const fecha = values.fechaDocumento ? dayjs(values.fechaDocumento) : dayjs();
+
+    return {
+      id: documento?.id ?? 0,
+      fechaDocumento: toISOFormat(fecha.toDate()),
+      tipoDocumento: tipoValue || documento?.codigoTipo || 'CHK',
+      noDocumento,
+      codigoEntidad: selectedEntidad?.codigo || documento?.codigoEntidad || '',
+      nombreEntidad: selectedEntidad?.nombre || documento?.nombreEntidad || '',
+      ctaBancaria: values.cuentaBancaria || selectedCuenta || '',
+      concepto: selectedConcepto?.nombre || '',
+      referencia: values.referencia || '',
+      total: totalUsuario ?? 0,
+      // Si el usuario no escribio el beneficiario, se usa el del documento o el de la entidad.
+      nombreBeneficiario: values.beneficiario || documento?.nombreBeneficiario || selectedEntidad?.nombre || '',
+      montoEnLetras: '',
+      estado: documento?.estado ?? 0,
+      notas: values.nota || '',
+    };
+  };
+
+  /** Mensaje de error del backend cuando la respuesta viene como Blob (responseType: 'blob'). */
+  const mensajeErrorReporte = async (err: any, fallback: string): Promise<string> => {
+    const data = err?.response?.data;
+    if (data instanceof Blob) {
+      try {
+        const texto = await data.text();
+        if (texto) {
+          const parsed = JSON.parse(texto);
+          if (parsed?.errorMessage) return parsed.errorMessage;
+        }
+      } catch {
+        // Respuesta no JSON: se usa el mensaje generico.
+      }
+    }
+    return extraerMensajeError(err, fallback);
+  };
+
+  /**
+   * Vista previa e impresion del cheque Popular. En modo crear el documento se guarda
+   * primero, porque el numero de cheque sale del documento persistido.
+   */
+  const handleChequePopular = async (accion: 'vista-previa' | 'imprimir') => {
+    if (!esChequePopular || saving || generandoCheque) return;
+
+    const error = validarFormulario();
+    if (error) {
+      message.error(error);
+      return;
+    }
+
+    const beneficiario = (
+      form.getFieldValue('beneficiario')
+      || data?.nombreBeneficiario
+      || selectedEntidad?.nombre
+      || ''
+    ).trim();
+
+    if (!beneficiario) {
+      message.error('Debe indicar el beneficiario del cheque');
+      return;
+    }
+
+    if (mode === 'editar' && form.isFieldsTouched()) {
+      message.warning('Hay cambios sin guardar: el cheque se genera con los datos en pantalla.');
+    }
+
+    setSaving(true);
+    setGenerandoCheque(true);
+    try {
+      let documento = data;
+      let noDocumento = data?.noDocumento || '';
+      let idParaNavegar: number | null = null;
+
+      if (mode === 'crear') {
+        const { id: idCreado, warning } = await transaccionBancariaApi.crearDocBancario(
+          sucursalActiva,
+          construirDTO()
+        );
+        idParaNavegar = idCreado;
+        documento = await transaccionBancariaApi.obtenerPorId(sucursalActiva, idCreado);
+        noDocumento = documento?.noDocumento || '';
+        setData(documento);
+        if (warning) message.warning(warning);
+        else message.success('Transacción bancaria guardada');
+      }
+
+      if (accion === 'imprimir' && toEstadoNum(documento?.estado) === 3) {
+        message.warning('El documento está anulado: revise el cheque antes de usarlo.');
+      }
+
+      const payload = construirPayloadCheque(documento, noDocumento);
+      const blob = accion === 'vista-previa'
+        ? await reporteChequePopularApi.vistaPrevia(sucursalActiva, payload)
+        : await reporteChequePopularApi.imprimir(sucursalActiva, payload);
+
+      window.open(URL.createObjectURL(blob), '_blank');
+
+      if (idParaNavegar) {
+        navigationConfirmedRef.current = true;
+        navigate(`/FTransBanco/${idParaNavegar}`, { replace: true });
+      }
+    } catch (err: any) {
+      message.error(await mensajeErrorReporte(err, 'Error al generar el cheque de Banco Popular'));
+    } finally {
+      setSaving(false);
+      setGenerandoCheque(false);
+    }
+  };
+
   // ===== Loading state =====
   if (loading) {
     return <LoadingSpinner mensaje="Cargando documento..." />;
@@ -1027,7 +1163,24 @@ const TransaccionBancariaFormulario: React.FC = () => {
         periodo={periodo}
         onGuardar={handleGuardar}
         onCancelar={handleCancelar}
-      />
+      >
+        {esChequePopular && (
+          <Dropdown
+            trigger={['click']}
+            menu={{
+              items: [
+                { key: 'vista-previa', icon: <EyeOutlined />, label: 'Vista previa del cheque' },
+                { key: 'imprimir', icon: <PrinterOutlined />, label: 'Imprimir sobre papel preimpreso' },
+              ],
+              onClick: ({ key }) => handleChequePopular(key as 'vista-previa' | 'imprimir'),
+            }}
+          >
+            <Button icon={<PrinterOutlined />} loading={generandoCheque} disabled={saving}>
+              Cheque
+            </Button>
+          </Dropdown>
+        )}
+      </FormularioToolbar>
 
       {loadingError && (
         <Alert
