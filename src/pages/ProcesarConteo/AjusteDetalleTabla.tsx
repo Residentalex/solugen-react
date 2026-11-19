@@ -11,7 +11,7 @@ const AjusteDetalleTabla: React.FC<{
   <Table<AjusteConteoDTO>
     columns={columnasAjuste}
     dataSource={ajustes}
-    rowKey="codigo"
+    rowKey={(registro) => `${registro.codigo}|${registro.familia ?? ''}`}
     size="small"
     loading={cargando}
     locale={{ emptyText: 'No hay artículos para mostrar con este filtro.' }}

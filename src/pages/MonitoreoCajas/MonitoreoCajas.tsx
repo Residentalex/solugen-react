@@ -60,6 +60,8 @@ const MonitoreoCajas: React.FC = () => {
   const [guardandoRNC, setGuardandoRNC] = useState(false);
   const [registroGuardado, setRegistroGuardado] = useState<RNCCEDRegistroDTO | null>(null);
   const [rncModalOpen, setRncModalOpen] = useState(false);
+  // Cantidad de turnos cerrados por subir, por IP de caja.
+  const [porSubirPorIp, setPorSubirPorIp] = useState<Record<string, number>>({});
 
   const signalRReadyRef = useRef(false);
 
@@ -249,6 +251,38 @@ const MonitoreoCajas: React.FC = () => {
     [cajasFiltradas]
   );
 
+  const ipsConectadasClave = useMemo(
+    () => cajasFiltradas.filter((c) => c.conectado).map((c) => c.ip).sort().join(','),
+    [cajasFiltradas]
+  );
+
+  useEffect(() => {
+    const ips = ipsConectadasClave ? ipsConectadasClave.split(',') : [];
+    if (ips.length === 0) {
+      setPorSubirPorIp({});
+      return;
+    }
+
+    let activo = true;
+    Promise.all(
+      ips.map(async (ip) => {
+        try {
+          const turnos = await monitoreoApi.turnosPorSubir(ip);
+          return [ip, turnos.length] as const;
+        } catch {
+          return [ip, 0] as const;
+        }
+      })
+    ).then((pares) => {
+      if (!activo) return;
+      setPorSubirPorIp(Object.fromEntries(pares));
+    });
+
+    return () => {
+      activo = false;
+    };
+  }, [ipsConectadasClave]);
+
   const ipsConectadas = useMemo(
     () => cajasFiltradas.filter((c) => c.conectado).map((c) => c.ip),
     [cajasFiltradas]
@@ -417,7 +451,7 @@ const MonitoreoCajas: React.FC = () => {
                 <Row gutter={[12, 12]}>
                   {cajasFiltradas.map((caja) => (
                     <Col key={caja.ip} xs={24} sm={12} md={8} lg={6} xl={6} xxl={4}>
-                      <CajaCard caja={caja} onClick={handleCajaClick} />
+                      <CajaCard caja={caja} onClick={handleCajaClick} porSubir={porSubirPorIp[caja.ip] ?? 0} />
                     </Col>
                   ))}
                 </Row>

@@ -1,7 +1,7 @@
 ﻿import React from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Spin } from 'antd';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useSearchParams } from 'react-router-dom';
 import { queryClient } from './lib/queryClient';
 import { useAuthStore } from './stores/authStore';
 import Login from './pages/Login/Login';
@@ -13,6 +13,8 @@ const ConfiguracionDashboard = React.lazy(() => import('./pages/Dashboard/Config
 const EntradaAlmacen = React.lazy(() => import('./pages/EntradaAlmacen/EntradaAlmacen'));
 const EntradaAlmacenDetalle = React.lazy(() => import('./pages/EntradaAlmacen/EntradaAlmacenDetalle'));
 const EntradaAlmacenFormulario = React.lazy(() => import('./pages/EntradaAlmacen/EntradaAlmacenFormulario'));
+const AjusteAlmacenDetalle = React.lazy(() => import('./pages/EntradaAlmacen/AjusteAlmacenDetalle'));
+const AjusteAlmacenFormulario = React.lazy(() => import('./pages/EntradaAlmacen/AjusteAlmacenFormulario'));
 const SalidaAlmacen = React.lazy(() => import('./pages/SalidaAlmacen/SalidaAlmacen'));
 const SalidaAlmacenDetalle = React.lazy(() => import('./pages/SalidaAlmacen/SalidaAlmacenDetalle'));
 const SalidaAlmacenFormulario = React.lazy(() => import('./pages/SalidaAlmacen/SalidaAlmacenFormulario'));
@@ -120,6 +122,8 @@ const CategoriaArticuloFormulario = React.lazy(() => import('./pages/CategoriasA
 const FamiliasArticulo = React.lazy(() => import('./pages/FamiliasArticulo/FamiliasArticulo'));
 const Marcas = React.lazy(() => import('./pages/Marca/Marcas'));
 const MarcaFormulario = React.lazy(() => import('./pages/Marca/MarcaFormulario'));
+const Promociones = React.lazy(() => import('./pages/Promociones/Promociones'));
+const PromocionFormulario = React.lazy(() => import('./pages/Promociones/PromocionFormulario'));
 const Sucursales = React.lazy(() => import('./pages/Sucursales/Sucursales'));
 const SucursalFormulario = React.lazy(() => import('./pages/Sucursales/SucursalFormulario'));
 const Departamentos = React.lazy(() => import('./pages/Departamentos/Departamentos'));
@@ -146,6 +150,59 @@ const Conteos = React.lazy(() => import('./pages/Conteos/Conteos'));
 const ConteoDetalle = React.lazy(() => import('./pages/Conteos/ConteoDetalle'));
 const ConteoFisicoFormulario = React.lazy(() => import('./pages/Conteos/ConteoFisicoFormulario'));
 const ProcesarConteo = React.lazy(() => import('./pages/ProcesarConteo/ProcesarConteo'));
+
+/**
+ * El detalle de /FENP/:id atiende tanto entradas de almacén (ENP) como los
+ * documentos de ajuste de conteo (EPJ/SPJ). El tipo viaja por query
+ * (?tipoDoc=EPJ|SPJ) porque el id no alcanza para distinguirlos.
+ */
+const EntradaAlmacenDetalleRoute: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const tipoDoc = searchParams.get('tipoDoc');
+
+  if (tipoDoc === 'EPJ' || tipoDoc === 'SPJ') {
+    return <AjusteAlmacenDetalle tipo={tipoDoc} />;
+  }
+
+  return <EntradaAlmacenDetalle />;
+};
+
+const EntradaAlmacenFormularioRoute: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const tipoDoc = searchParams.get('tipoDoc');
+
+  if (tipoDoc === 'EPJ' || tipoDoc === 'SPJ') {
+    return <AjusteAlmacenFormulario tipo={tipoDoc} />;
+  }
+
+  return <EntradaAlmacenFormulario />;
+};
+
+/**
+ * La salida de almacén (/FSAP/:id) atiende las SPJ de ajuste. El tipo viaja por
+ * query (?tipoDoc=SPJ) y se resuelve al mismo detalle/formulario de ajustes.
+ */
+const SalidaAlmacenDetalleRoute: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const tipoDoc = searchParams.get('tipoDoc');
+
+  if (tipoDoc === 'EPJ' || tipoDoc === 'SPJ') {
+    return <AjusteAlmacenDetalle tipo={tipoDoc} />;
+  }
+
+  return <SalidaAlmacenDetalle />;
+};
+
+const SalidaAlmacenFormularioRoute: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const tipoDoc = searchParams.get('tipoDoc');
+
+  if (tipoDoc === 'EPJ' || tipoDoc === 'SPJ') {
+    return <AjusteAlmacenFormulario tipo={tipoDoc} />;
+  }
+
+  return <SalidaAlmacenFormulario />;
+};
 const MovimientosProductos = React.lazy(() => import('./pages/MovimientosProductos/MovimientosProductos'));
 const ReporteExistencia = React.lazy(() => import('./pages/Inventario/ReporteExistencia'));
 const ReporteEntradas = React.lazy(() => import('./pages/Inventario/ReporteEntradas'));
@@ -220,6 +277,8 @@ const VisanetTest = React.lazy(() => import('./pages/VisanetTest/VisanetTest'));
 const MonitoreoCajas = React.lazy(() => import('./pages/MonitoreoCajas/MonitoreoCajas'));
 const CajaOperacionesVivo = React.lazy(() => import('./pages/MonitoreoCajas/CajaOperacionesVivo'));
 const ReportesConfig = React.lazy(() => import('./pages/ReportesConfig/ReportesConfig'));
+const Sesiones = React.lazy(() => import('./pages/Sesiones/Sesiones'));
+const Ncf = React.lazy(() => import('./pages/Ncf/Ncf'));
 const ChatPage = React.lazy(() => import('./pages/Chat/ChatPage'));
 const ActividadesPage = React.lazy(() => import('./pages/Actividades/ActividadesPage'));
 const ServiciosActividadPage = React.lazy(() => import('./pages/Actividades/ServiciosActividadPage'));
@@ -300,16 +359,18 @@ const App: React.FC = () => {
           <Route index element={<Dashboard />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="dashboardconfig" element={<ConfiguracionDashboard />} />
+          <Route path="SESIONES" element={<Sesiones />} />
+          <Route path="NCF" element={<Ncf />} />
             <Route path="Reportes/:modulo" element={<ReportesModulo />} />
             <Route path="FENP" element={<EntradaAlmacen />} />
             <Route path="FENP/nuevo" element={<EntradaAlmacenFormulario />} />
-            <Route path="FENP/:id/editar" element={<EntradaAlmacenFormulario />} />
-            <Route path="FENP/:id" element={<EntradaAlmacenDetalle />} />
+            <Route path="FENP/:id/editar" element={<EntradaAlmacenFormularioRoute />} />
+            <Route path="FENP/:id" element={<EntradaAlmacenDetalleRoute />} />
             <Route path="FSAP" element={<SalidaAlmacen />} />
             <Route path="FSORC" element={<Proximamente modulo="Solicitud de Compra" codigo="FSORC" />} />
             <Route path="FSAP/nuevo" element={<SalidaAlmacenFormulario />} />
-            <Route path="FSAP/:id/editar" element={<SalidaAlmacenFormulario />} />
-            <Route path="FSAP/:id" element={<SalidaAlmacenDetalle />} />
+            <Route path="FSAP/:id/editar" element={<SalidaAlmacenFormularioRoute />} />
+            <Route path="FSAP/:id" element={<SalidaAlmacenDetalleRoute />} />
            <Route path="FDVC" element={<DevolucionCompra />} />
             <Route path="FDVC/nuevo" element={<DevolucionCompraFormulario />} />
             <Route path="FDVC/:id/editar" element={<DevolucionCompraFormulario />} />
@@ -473,6 +534,9 @@ const App: React.FC = () => {
             <Route path="MMarca" element={<Marcas />} />
             <Route path="MMarca/nuevo" element={<MarcaFormulario />} />
             <Route path="MMarca/:codigo/editar" element={<MarcaFormulario />} />
+            <Route path="MPromocion" element={<Promociones />} />
+            <Route path="MPromocion/nuevo" element={<PromocionFormulario />} />
+            <Route path="MPromocion/:codigo/editar" element={<PromocionFormulario />} />
 <Route path="MDepto" element={<Departamentos />} />
             <Route path="MDepto/nuevo" element={<DepartamentoFormulario />} />
             <Route path="MDepto/:codigo/editar" element={<DepartamentoFormulario />} />
@@ -591,13 +655,13 @@ const App: React.FC = () => {
             <Route path="Reportes/:modulo" element={<ReportesModulo />} />
             <Route path="FENP" element={<EntradaAlmacen />} />
             <Route path="FENP/nuevo" element={<EntradaAlmacenFormulario />} />
-            <Route path="FENP/:id/editar" element={<EntradaAlmacenFormulario />} />
-            <Route path="FENP/:id" element={<EntradaAlmacenDetalle />} />
+            <Route path="FENP/:id/editar" element={<EntradaAlmacenFormularioRoute />} />
+            <Route path="FENP/:id" element={<EntradaAlmacenDetalleRoute />} />
             <Route path="FSAP" element={<SalidaAlmacen />} />
             <Route path="FSORC" element={<Proximamente modulo="Solicitud de Compra" codigo="FSORC" />} />
             <Route path="FSAP/nuevo" element={<SalidaAlmacenFormulario />} />
-            <Route path="FSAP/:id/editar" element={<SalidaAlmacenFormulario />} />
-            <Route path="FSAP/:id" element={<SalidaAlmacenDetalle />} />
+            <Route path="FSAP/:id/editar" element={<SalidaAlmacenFormularioRoute />} />
+            <Route path="FSAP/:id" element={<SalidaAlmacenDetalleRoute />} />
            <Route path="FDVC" element={<DevolucionCompra />} />
             <Route path="FDVC/nuevo" element={<DevolucionCompraFormulario />} />
             <Route path="FDVC/:id/editar" element={<DevolucionCompraFormulario />} />
@@ -759,6 +823,9 @@ const App: React.FC = () => {
             <Route path="MMarca" element={<Marcas />} />
             <Route path="MMarca/nuevo" element={<MarcaFormulario />} />
             <Route path="MMarca/:codigo/editar" element={<MarcaFormulario />} />
+            <Route path="MPromocion" element={<Promociones />} />
+            <Route path="MPromocion/nuevo" element={<PromocionFormulario />} />
+            <Route path="MPromocion/:codigo/editar" element={<PromocionFormulario />} />
 <Route path="MDepto" element={<Departamentos />} />
             <Route path="MDepto/nuevo" element={<DepartamentoFormulario />} />
             <Route path="MDepto/:codigo/editar" element={<DepartamentoFormulario />} />

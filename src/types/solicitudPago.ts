@@ -87,3 +87,20 @@ export interface FiltroSolicitudPago {
   ctaBancaria?: string;
   concepto?: string;
 }
+
+/** Criterios de impresión en lote de Solicitudes de Pago */
+export type CriterioImpresionLoteSolicitudPago = 'documento' | 'fecha' | 'concepto';
+
+/** Filtro para impresión en lote de Solicitudes de Pago */
+export interface FiltroImpresionLoteSolicitudPago {
+  criterio: CriterioImpresionLoteSolicitudPago;
+  /** Criterio "documento": rango de documentos (admite `00020070` o `20070`). */
+  documentoDesde?: string;
+  documentoHasta?: string;
+  /** Criterio "fecha": rango en formato `yyyyMMddHHmmss`. */
+  desde?: string;
+  hasta?: string;
+  /** Criterio "concepto": código y descripción del concepto. */
+  concepto?: string;
+  conceptoTexto?: string;
+}

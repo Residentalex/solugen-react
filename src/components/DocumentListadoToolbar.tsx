@@ -47,6 +47,8 @@ interface DocumentListadoToolbarProps {
   extraLeft?: React.ReactNode;
   extraRight?: React.ReactNode;
   extraToolbar?: React.ReactNode;
+  /** Controles que se muestran justo antes de los botones de accion (recargar, exportar...). */
+  extraAcciones?: React.ReactNode;
 }
 
 const DocumentListadoToolbar: React.FC<DocumentListadoToolbarProps> = ({
@@ -80,6 +82,7 @@ const DocumentListadoToolbar: React.FC<DocumentListadoToolbarProps> = ({
   extraLeft,
   extraRight,
   extraToolbar,
+  extraAcciones,
 }) => {
   const accionesToolbar: ToolbarAccion[] = [
     ...(showCrear && onCrear
@@ -189,6 +192,7 @@ const DocumentListadoToolbar: React.FC<DocumentListadoToolbarProps> = ({
       <PageSizeSelect value={pageSize} onChange={onPageSizeChange} />
       {extraToolbar}
       <div style={{ flex: 1 }} />
+      {extraAcciones}
       <ToolbarAcciones acciones={accionesToolbar} />
       {extraRight}
     </div>

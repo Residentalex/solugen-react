@@ -2,7 +2,7 @@ import * as signalR from '@microsoft/signalr';
 import { apiClient } from './client';
 import { useAuthStore } from '../stores/authStore';
 import type { ApiResponse } from '../types/auth';
-import type { MonitoreoCajaDTO, ConfigurarCajaRequest, SincronizarRequest, CajaVivoDTO, FacturaCajaEventoDTO } from '../types/monitoreo';
+import type { MonitoreoCajaDTO, ConfigurarCajaRequest, SincronizarRequest, CajaVivoDTO, FacturaCajaEventoDTO, TurnoPorSubirDTO } from '../types/monitoreo';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4003/api';
 const HUB_URL = API_URL.replace(/\/api$/, '') + '/hubs/monitoreo';
@@ -258,8 +258,14 @@ class MonitoreoApiService {
     return data.data;
   }
 
-  async sincronizar(ip: string, request: SincronizarRequest): Promise<void> {
-    await apiClient.post(`${BASE}/${encodeURIComponent(ip)}/sincronizar`, request);
+  async turnosPorSubir(ip: string): Promise<TurnoPorSubirDTO[]> {
+    const { data } = await apiClient.get<ApiResponse<TurnoPorSubirDTO[]>>(
+      `${BASE}/caja/${encodeURIComponent(ip)}/turnos-por-subir`
+    );
+    return data.data ?? [];
+  }
+
+  async sincronizar(ip: string, request: SincronizarRequest): Promise<void> {    await apiClient.post(`${BASE}/${encodeURIComponent(ip)}/sincronizar`, request);
   }
 
   async pausar(ip: string): Promise<void> {

@@ -25,7 +25,7 @@ import {
 import { monitoreoApi } from '../../api/monitoreoApi';
 import { facturaPOSApi } from '../../api/facturaPOSApi';
 import { useAuthStore } from '../../stores/authStore';
-import type { CajaVivoDTO, FacturaCajaVivoDTO, FacturaCajaEventoDTO } from '../../types/monitoreo';
+import type { CajaVivoDTO, FacturaCajaVivoDTO, FacturaCajaEventoDTO, TurnoPorSubirDTO } from '../../types/monitoreo';
 import type { CobroDTO } from '../../types/facturaPOS';
 import CobrosMinimal from '../../components/CobrosCard/CobrosMinimal';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
@@ -75,6 +75,8 @@ const CajaOperacionesVivo: React.FC = () => {
   const [docResolviendo, setDocResolviendo] = useState<number | null>(null);
   const [ultimaActualizacion, setUltimaActualizacion] = useState<Date | null>(null);
   const [hubConectado, setHubConectado] = useState<boolean>(() => monitoreoApi.estaConectado);
+  // Turnos cerrados que aun tienen datos sin confirmar en el central.
+  const [turnosPorSubir, setTurnosPorSubir] = useState<TurnoPorSubirDTO[]>([]);
 
   // Guarda anti-solapado de refrescos (push/poll).
   const cargandoRef = useRef(false);
@@ -89,12 +91,16 @@ const CajaOperacionesVivo: React.FC = () => {
       cargandoRef.current = true;
       if (!silencioso) setLoading(true);
       try {
-        const vivo = await monitoreoApi.obtenerVivo(ip, {
-          buscar: buscar || undefined,
-          cantidad: pageSize,
-          salto: (page - 1) * pageSize,
-        });
+        const [vivo, porSubir] = await Promise.all([
+          monitoreoApi.obtenerVivo(ip, {
+            buscar: buscar || undefined,
+            cantidad: pageSize,
+            salto: (page - 1) * pageSize,
+          }),
+          monitoreoApi.turnosPorSubir(ip).catch(() => null),
+        ]);
         setData(vivo);
+        setTurnosPorSubir(porSubir ?? []);
         setError(null);
         setUltimaActualizacion(new Date());
       } catch (err: unknown) {
@@ -540,6 +546,82 @@ const CajaOperacionesVivo: React.FC = () => {
               <div style={{ marginTop: 16 }}>
                 <CobrosMinimal cobrosPOS={resumen.totalesPorMetodo} />
               </div>
+            </Card>
+          </div>
+        )}
+
+        {/* ── Turnos por subir ─────────────────────────────── */}
+        {turnosPorSubir.length > 0 && (
+          <div style={{ padding: '0 24px 16px' }}>
+            <Card
+              className="paces-card"
+              size="small"
+              title={`Turnos por subir (${turnosPorSubir.length})`}
+            >
+              <Table<TurnoPorSubirDTO>
+                className="paces-border-top paces-list-table"
+                rowKey={(t) => String(t.turnoId)}
+                dataSource={turnosPorSubir}
+                pagination={false}
+                size="small"
+                scroll={{ x: 820 }}
+                columns={[
+                  {
+                    title: 'Turno',
+                    dataIndex: 'noTurno',
+                    key: 'noTurno',
+                    width: 90,
+                    render: (v: number) => `#${v}`,
+                  },
+                  {
+                    title: 'Cajero',
+                    dataIndex: 'cajero',
+                    key: 'cajero',
+                    width: 180,
+                    ellipsis: true,
+                  },
+                  {
+                    title: 'Cierre',
+                    key: 'cierre',
+                    width: 170,
+                    render: (_: unknown, t: TurnoPorSubirDTO) =>
+                      `${t.fechaCierre ? t.fechaCierre.slice(0, 10) : ''} ${t.horaCierre}`.trim(),
+                  },
+                  {
+                    title: 'Fact. pendientes',
+                    dataIndex: 'facturasPendientes',
+                    key: 'facturasPendientes',
+                    width: 130,
+                    align: 'center',
+                  },
+                  {
+                    title: 'Fact. con error',
+                    dataIndex: 'facturasError',
+                    key: 'facturasError',
+                    width: 120,
+                    align: 'center',
+                  },
+                  {
+                    title: 'Estado cierre',
+                    dataIndex: 'estadoCierre',
+                    key: 'estadoCierre',
+                    width: 130,
+                    render: (v: string | null) =>
+                      v ? (
+                        <Tag color={v === 'ERROR' ? 'red' : 'gold'}>{v}</Tag>
+                      ) : (
+                        <Tag>Sin encolar</Tag>
+                      ),
+                  },
+                  {
+                    title: 'Último error',
+                    dataIndex: 'ultimoError',
+                    key: 'ultimoError',
+                    ellipsis: true,
+                    render: (v: string | null) => v || '',
+                  },
+                ]}
+              />
             </Card>
           </div>
         )}

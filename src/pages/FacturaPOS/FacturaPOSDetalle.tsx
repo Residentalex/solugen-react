@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, Input, message, Modal, Tooltip, Typography, QRCode, Badge
+  Card, Descriptions, Table, Tabs, Tag, Spin, Space, Row, Col, Grid, Input, message, Modal, Tooltip, Typography, QRCode, Badge
 } from 'antd';
 import type { MenuProps } from 'antd';
 import {
@@ -105,8 +105,6 @@ const FacturaPOSDetalle: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [imprimiendo, setImprimiendo] = useState(false);
   const [previsualizando, setPrevisualizando] = useState(false);
-  const [vistaPreviaUrl, setVistaPreviaUrl] = useState<string | null>(null);
-  const vistaPreviaUrlRef = useRef<string | null>(null);
   const [printerModalOpen, setPrinterModalOpen] = useState(false);
   const [printerList, setPrinterList] = useState<string[]>([]);
   const [selectedPrinter, setSelectedPrinter] = useState<string>('');
@@ -153,12 +151,6 @@ const FacturaPOSDetalle: React.FC = () => {
   const handleRefresh = React.useCallback(() => {
     recargarDocumento();
   }, [recargarDocumento]);
-
-  useEffect(() => () => {
-    if (vistaPreviaUrlRef.current) {
-      URL.revokeObjectURL(vistaPreviaUrlRef.current);
-    }
-  }, []);
 
   // Cargar devoluciones vinculadas via DTRANSIDASOC cuando cambie el documento
   useEffect(() => {
@@ -572,7 +564,7 @@ const FacturaPOSDetalle: React.FC = () => {
     if (key === 'ticket') {
       handlePrintTicket();
     } else if (key === 'vista-previa-termica') {
-      handlePrevisualizarTicket();
+      handleVerReporteTermico();
     } else if (key === 'factura-cliente') {
       handlePrintFacturaCliente();
     }
@@ -676,46 +668,31 @@ const FacturaPOSDetalle: React.FC = () => {
     }
   };
 
-  const cerrarVistaPreviaTicket = () => {
-    if (vistaPreviaUrlRef.current) {
-      URL.revokeObjectURL(vistaPreviaUrlRef.current);
-      vistaPreviaUrlRef.current = null;
-    }
-    setVistaPreviaUrl(null);
-  };
-
-  const handlePrevisualizarTicket = async () => {
+  const handleVerReporteTermico = async () => {
     setPrevisualizando(true);
     try {
-      const { payload, servicioLocalUrl } = await prepararPayloadTicket();
-      const resultado = await reportesConfigApi.previsualizarLocal(payload, servicioLocalUrl);
-      if (!resultado.ok || !resultado.imagen) {
-        message.error(resultado.error ?? 'No se pudo generar la vista previa del ticket.');
-        return;
-      }
-
-      cerrarVistaPreviaTicket();
-      const urlImagen = URL.createObjectURL(resultado.imagen);
-      vistaPreviaUrlRef.current = urlImagen;
-      setVistaPreviaUrl(urlImagen);
+      const res = await apiClient.post(`/reportes/facturacion/pos/${sucursalActiva}`, data, {
+        responseType: 'blob',
+      });
+      const blobUrl = URL.createObjectURL(res.data);
+      window.open(blobUrl, '_blank');
     } catch (err: any) {
-      const msg =
-        err?.response?.data?.errorMessage ||
-        err?.response?.data?.ErrorMessage ||
-        err?.message ||
-        'Error al generar la vista previa del ticket';
+      let msg = err?.message || 'Error al generar el reporte termico';
+      const respuesta = err?.response?.data;
+      if (respuesta instanceof Blob) {
+        try {
+          const cuerpo = JSON.parse(await respuesta.text());
+          msg = cuerpo?.errorMessage || cuerpo?.ErrorMessage || msg;
+        } catch {
+          // La respuesta no es JSON; se conserva el mensaje generico.
+        }
+      } else {
+        msg = respuesta?.errorMessage || respuesta?.ErrorMessage || msg;
+      }
       message.error(msg);
     } finally {
       setPrevisualizando(false);
     }
-  };
-
-  const imprimirPDF = async () => {
-    const res = await apiClient.post(`/reportes/facturacion/pos/${sucursalActiva}`, data, {
-      responseType: 'blob',
-    });
-    const blobUrl = URL.createObjectURL(res.data);
-    window.open(blobUrl, '_blank');
   };
 
   const handlePrintFacturaCliente = async () => {
@@ -843,7 +820,7 @@ const FacturaPOSDetalle: React.FC = () => {
             permiso: { codigoPantalla: screenCode, accion: 'IMPRIMIR' },
             menu: { items: printMenuItems, onClick: handlePrintMenuClick },
           },
-          ...(data.documento?.codigo === 'PV' && data.estado !== 0 && data.estado !== 3 && saldoPendiente > 0.01 && data.diasCredito > 0 ? [{
+          ...(data.documento?.codigo === 'PV' && data.estado !== 0 && data.estado !== 3 && saldoPendiente > 0.01 ? [{
             key: 'generar-pvc',
             label: 'Generar PVC',
             icon: <CreditCardOutlined />,
@@ -1475,44 +1452,6 @@ const FacturaPOSDetalle: React.FC = () => {
           </div>
         </div>
       )}
-
-      <Modal
-        title="Vista previa termica"
-        open={vistaPreviaUrl !== null}
-        onCancel={cerrarVistaPreviaTicket}
-        footer={<Button onClick={cerrarVistaPreviaTicket}>Cerrar</Button>}
-        width={680}
-      >
-        <Text type="secondary">
-          Se interpreta el mismo ticket enviado al agente local. La apariencia fisica puede variar segun el papel y la impresora.
-        </Text>
-        {vistaPreviaUrl && (
-          <div
-            style={{
-              maxHeight: '70vh',
-              overflow: 'auto',
-              marginTop: 16,
-              textAlign: 'center',
-              background: '#f5f5f5',
-              padding: 16,
-            }}
-          >
-            <img
-              src={vistaPreviaUrl}
-              alt="Vista previa del ticket termico"
-              style={{
-                display: 'block',
-                width: '100%',
-                maxWidth: 576,
-                height: 'auto',
-                margin: '0 auto',
-                background: '#fff',
-                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.18)',
-              }}
-            />
-          </div>
-        )}
-      </Modal>
 
       {/* Modal de anulación de factura POS */}
       <Modal

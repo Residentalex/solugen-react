@@ -25,12 +25,13 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useCompanyStore } from '../../stores/companyStore';
 import { transaccionBancariaApi } from '../../api/transaccionBancariaApi';
+import { transaccionApi } from '../../api/transaccionApi';
 import { cuentaBancariaApi } from '../../api/cuentaBancariaApi';
 import type { CuentaBancariaDTO } from '../../api/cuentaBancariaApi';
 import { conceptosApi } from '../../api/conceptosApi';
 import { tipoApi } from '../../api/tipoApi';
 import { apiClient } from '../../api/client';
-import type { TransaccionDTO, TipoDocumentoDTO } from '../../types/transaccion';
+import type { TransaccionDTO, TipoDocumentoDTO, TransaccionAsientoDTO } from '../../types/transaccion';
 import type { ConceptoDTO, EntidadDTO } from '../../types/entradaAlmacen';
 import { OrigenCuenta } from '../../types/contabilidad';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
@@ -44,8 +45,11 @@ import { obtenerNombreSucursal } from '../../utils/sucursalEnumMapper';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 import BuscarDocumentoModal from '../../components/BuscarDocumentoModal/BuscarDocumentoModal';
 import AsientosContableTable from '../../components/AsientosContableTable';
+import AsientosContableEditables from '../../components/AsientosContableEditables/AsientosContableEditables';
+import BuscarCuentaContableModal from '../../components/BuscarCuentaContableModal/BuscarCuentaContableModal';
 import LogTable from '../../components/LogTable';
 import { toTitleCase, extraerMensajeError, toISOFormat, formatNumber, redondear2 } from '../../utils/formats';
+import { esDebito, esCredito } from '../../utils/contabilidad';
 import { toEstadoNum } from '../../utils/estadoDocumento';
 import MemoField from '../../components/MemoField/MemoField';
 import CamposRapidosFila from '../../components/CamposRapidosFila/CamposRapidosFila';
@@ -100,6 +104,14 @@ const TransaccionBancariaFormulario: React.FC = () => {
   // ===== Documentos Asociados editables =====
   const [documentosAsociados, setDocumentosAsociados] = useState<any[]>([]);
   const [buscarDocModalOpen, setBuscarDocModalOpen] = useState(false);
+
+  // ===== Asientos contables =====
+  const [asientos, setAsientos] = useState<TransaccionAsientoDTO[]>([]);
+  const [generandoAsientos, setGenerandoAsientos] = useState(false);
+  const [cuentaModalAsientoOpen, setCuentaModalAsientoOpen] = useState(false);
+  const [errorGeneracion, setErrorGeneracion] = useState<string | null>(null);
+  const usuario = useAuthStore((s: any) => s.usuario);
+  const permisoModificarAsientos = usuario?.permisosEspeciales?.some((p: any) => p.codigo?.toUpperCase() === 'PE_MODIFICAR_ASIENTOS' && p.valor === true) ?? false;
 
   // ===== Pendiente efectivo por fila =====
   // DOCASOC.PENDIENTE puede venir mal (0) cuando en realidad DEBITADO - ACREDITADO != 0.
@@ -541,6 +553,13 @@ const TransaccionBancariaFormulario: React.FC = () => {
       }
     }
 
+    // Validar asientos cuadrados
+    if (asientos.length > 0) {
+      const deb = asientos.reduce((s, r) => s + (esDebito(r.tipoAsiento) ? r.monto : 0), 0);
+      const cred = asientos.reduce((s, r) => s + (esCredito(r.tipoAsiento) ? r.monto : 0), 0);
+      if (Math.abs(deb - cred) > 0.01) return 'Los asientos contables no están cuadrados';
+    }
+
     return null;
   };
 
@@ -552,6 +571,10 @@ const TransaccionBancariaFormulario: React.FC = () => {
     const fechaDoc = values.fechaDocumento
       ? toISOFormat(values.fechaDocumento.toDate())
       : toISOFormat(new Date());
+
+    const totalDocumento = documentosAsociados.length > 0
+      ? totalCalculado
+      : (form.getFieldValue('total') ?? 0);
 
     const dto: Partial<TransaccionDTO> = {
       fechaDocumento: fechaDoc,
@@ -565,14 +588,17 @@ const TransaccionBancariaFormulario: React.FC = () => {
       referencia: values.referencia || '',
       ncf: values.ncf || '',
       nota: values.nota || '',
-      subTotal: subTotalCalculado,
+      subTotal: documentosAsociados.length > 0
+        ? subTotalCalculado
+        : redondear2(totalDocumento - (retencionesValue || 0)),
       descuento: sumaDescuentos,
       impuestos: impuestosValue,
       retenciones: retencionesValue,
-      total: documentosAsociados.length > 0 ? totalCalculado : (form.getFieldValue('total') ?? 0),
+      total: totalDocumento,
       tasa: tasaValue,
       nombreBeneficiario: values.beneficiario || undefined,
       codigoMoneda: codigoMonedaDocumento,
+      asientos: asientos || [],
       entidad: selectedEntidad ? {
         codigo: selectedEntidad?.codigo || '',
         nombre: selectedEntidad?.nombre || data?.nombreEntidad || '',
@@ -650,6 +676,34 @@ const TransaccionBancariaFormulario: React.FC = () => {
     }
   };
 
+  const handleAgregarAsientoManual = (cuenta: any) => {
+    const nuevoAsiento: any = {
+      id: Date.now(),
+      cuentaContable: { noCuenta: cuenta.noCuenta, nombre: cuenta.nombre },
+      monto: 0,
+      tipoAsiento: 'D',
+      generado: false,
+      descripcion: '',
+    };
+    setAsientos((prev) => [...prev, nuevoAsiento as unknown as TransaccionAsientoDTO]);
+  };
+
+  const handleGenerarAsientos = async () => {
+    setGenerandoAsientos(true);
+    setErrorGeneracion(null);
+    try {
+      const dto = construirDTO();
+      const generados = await transaccionApi.generarAsientos(sucursalActiva, dto);
+      setAsientos((generados || []) as TransaccionAsientoDTO[]);
+      setErrorGeneracion(null);
+      message.success(`Se generaron ${generados.length} asientos`);
+    } catch (err: any) {
+      setErrorGeneracion(extraerMensajeError(err, 'Error al generar asientos'));
+    } finally {
+      setGenerandoAsientos(false);
+    }
+  };
+
   // ===== Refresh =====
   const handleRefresh = useCallback(() => {
     if (mode === 'crear') return;
@@ -664,6 +718,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
           return;
         }
         setData(res);
+        setAsientos((res.asientos as TransaccionAsientoDTO[]) || []);
 
         // Recargar documentos asociados
         if (res.transaccionesAsociadas && res.transaccionesAsociadas.length > 0) {
@@ -1407,9 +1462,37 @@ render: (_: any, record: any) => (
             },
             {
               key: 'asientos',
-              label: `Asientos (${data?.asientos?.length || 0})`,
-              children: (
-                <AsientosContableTable asientos={data?.asientos || []} scroll={{ x: 900 }} />
+              label: `Asientos (${asientos.length})`,
+              children: (permisoModificarAsientos && toEstadoNum(estado) === 0 && !selectedConcepto?.noAsientos) ? (
+                <>
+                  {errorGeneracion && (
+                    <Alert
+                      type="error"
+                      showIcon
+                      closable
+                      onClose={() => setErrorGeneracion(null)}
+                      style={{ marginBottom: 8 }}
+                      message="Error al generar asientos"
+                      description={errorGeneracion}
+                    />
+                  )}
+                  <div style={{ marginBottom: 8, display: 'flex', gap: 8 }}>
+                    <Button icon={<PlusOutlined />} onClick={() => setCuentaModalAsientoOpen(true)}>
+                      Agregar asiento manual
+                    </Button>
+                  </div>
+                  <AsientosContableEditables
+                    asientos={asientos}
+                    onChange={(nuevos) => setAsientos((nuevos || []) as TransaccionAsientoDTO[])}
+                    editable
+                    scroll={{ x: 900 }}
+                    onGenerar={handleGenerarAsientos}
+                    onLimpiar={() => { setAsientos([]); setErrorGeneracion(null); }}
+                    generando={generandoAsientos}
+                  />
+                </>
+              ) : (
+                <AsientosContableTable asientos={asientos} scroll={{ x: 900 }} />
               ),
             },
             {
@@ -1422,6 +1505,16 @@ render: (_: any, record: any) => (
           ]}
         />
       </Card>
+
+      <BuscarCuentaContableModal
+        open={cuentaModalAsientoOpen}
+        onClose={() => setCuentaModalAsientoOpen(false)}
+        onSelect={(cuenta) => {
+          handleAgregarAsientoManual(cuenta);
+          setCuentaModalAsientoOpen(false);
+        }}
+        sucursal={sucursalActiva}
+      />
     </div>
   );
 };

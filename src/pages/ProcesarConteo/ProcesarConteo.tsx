@@ -49,6 +49,7 @@ import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 import PermissionGate from '../../components/PermissionGate';
 import FechaColumnCell from '../../components/FechaColumnCell';
 import ProcesableAjuste from './ProcesableAjuste';
+import AjustesInventarioTab from './AjustesInventarioTab';
 
 const { Text } = Typography;
 const { Dragger } = Upload;
@@ -81,7 +82,7 @@ const ProcesarConteo: React.FC = () => {
    * Origen del conteo: por Evento (comportamiento histórico) o por Importación
    * de un Excel Código|Cantidad|Costo con fecha y almacén propios.
    */
-  const [origen, setOrigen] = useState<'evento' | 'importacion'>('evento');
+  const [origen, setOrigen] = useState<'evento' | 'importacion' | 'ajustes'>('ajustes');
   /** Fecha de conteo del modo importación (obligatoria en ese modo). */
   const [fechaConteo, setFechaConteo] = useState<Dayjs | null>(null);
 
@@ -524,6 +525,24 @@ const ProcesarConteo: React.FC = () => {
     cerrarImportarConteo,
   ]);
 
+  // Selector de modo compartido: se muestra junto al botón de actualizar en
+  // las tres vistas (Ajustes, Evento e Importación).
+  const selectorModo = (
+    <Segmented
+      value={origen}
+      onChange={(valor) => setOrigen(valor as 'evento' | 'importacion' | 'ajustes')}
+      options={[
+        { label: 'Ajustes', value: 'ajustes' },
+        { label: 'Evento', value: 'evento' },
+        { label: 'Importación', value: 'importacion' },
+      ]}
+    />
+  );
+
+  if (origen === 'ajustes') {
+    return <AjustesInventarioTab selector={selectorModo} />;
+  }
+
   if (contextoAjuste) {
     return (
       <ProcesableAjuste
@@ -569,14 +588,6 @@ const ProcesarConteo: React.FC = () => {
           onExportarExcel={origen === 'evento' ? handleExportarConteos : undefined}
           filtros={
             <Space size={8} wrap>
-              <Segmented
-                value={origen}
-                onChange={(valor) => setOrigen(valor as 'evento' | 'importacion')}
-                options={[
-                  { label: 'Evento', value: 'evento' },
-                  { label: 'Importación', value: 'importacion' },
-                ]}
-              />
               {origen === 'evento' ? (
                 <>
                   <Select
@@ -645,6 +656,7 @@ const ProcesarConteo: React.FC = () => {
               )}
             </Space>
           }
+          acciones={selectorModo}
           accionesItems={
             // La pantalla OProcesarConteo solo declara la accion PROCESAR en
             // AUTH_PANTALLA_ACCION (consultar en la base de seguridad), por eso

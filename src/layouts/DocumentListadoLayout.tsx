@@ -39,6 +39,8 @@ interface DocumentListadoLayoutProps<T> {
     extraLeft?: React.ReactNode;
     extraRight?: React.ReactNode;
     extraToolbar?: React.ReactNode;
+    /** Controles que se muestran justo antes de los botones de accion. */
+    extraAcciones?: React.ReactNode;
     showCrear?: boolean;
     onCrear?: () => void;
     showEditar?: boolean;

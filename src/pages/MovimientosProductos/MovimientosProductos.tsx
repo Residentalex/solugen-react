@@ -36,6 +36,8 @@ const TIPO_DOC_OPTIONS = [
   { value: 'PV', label: 'Factura POS' },
   { value: 'DVC', label: 'Devolución Compra' },
   { value: 'DEV', label: 'Devolución Venta' },
+  { value: 'EPJ', label: 'Entrada de Ajuste' },
+  { value: 'SPJ', label: 'Salida de Ajuste' },
 ];
 
 const TIPO_DOC_STYLE: Record<string, { color: string; label: string }> = {
@@ -45,6 +47,8 @@ const TIPO_DOC_STYLE: Record<string, { color: string; label: string }> = {
   PV: { color: 'processing', label: 'POS' },
   DVC: { color: 'warning', label: 'Dev. Compra' },
   DEV: { color: 'warning', label: 'Dev. Venta' },
+  EPJ: { color: 'success', label: 'Ent. Ajuste' },
+  SPJ: { color: 'error', label: 'Sal. Ajuste' },
   Existencia: { color: 'default', label: 'Existencia' },
 };
 
@@ -451,9 +455,16 @@ const MovimientosProductos: React.FC = () => {
       g.children!.push(f);
     }
 
-    return Array.from(grupos.values()).sort((a, b) =>
-      (a.grupoLlave ?? '').localeCompare(b.grupoLlave ?? '', undefined, { sensitivity: 'base' })
-    );
+    // Un grupo cuyo neto de cantidad y costo se muestra como 0.00 solo agrega
+    // ruido: se descarta de la vista agrupada. La tolerancia es la de la
+    // precision mostrada (2 decimales), no cero exacto.
+    const esCero = (valor?: number) => Math.abs(valor ?? 0) < 0.005;
+
+    return Array.from(grupos.values())
+      .filter((g) => !(esCero(g.cantidad) && esCero(g.costo)))
+      .sort((a, b) =>
+        (a.grupoLlave ?? '').localeCompare(b.grupoLlave ?? '', undefined, { sensitivity: 'base' })
+      );
   }, [detalleFiltrado, agruparPor]);
 
   const filasPaginadas = useMemo(() => {
@@ -482,8 +493,8 @@ const MovimientosProductos: React.FC = () => {
             d.familia?.toLowerCase().includes(t)
           );
         });
-    const entradas = base.filter((r) => r.tipoDocumento === 'ENP').length;
-    const salidas = base.filter((r) => r.tipoDocumento === 'SAP').length;
+    const entradas = base.filter((r) => r.tipoDocumento === 'ENP' || r.tipoDocumento === 'EPJ').length;
+    const salidas = base.filter((r) => r.tipoDocumento === 'SAP' || r.tipoDocumento === 'SPJ').length;
     const saldo = entradas - salidas;
     return { entradas, salidas, saldo };
   }, [data, searchText]);

@@ -72,8 +72,8 @@ const ScannerModal: React.FC<ScannerModalProps> = ({ open, onClose, onSelect }) 
         modificaPrecio: res.modificaPrecio ?? false,
         modificaDescripcion: res.modificaDescripcion ?? false,
       });
-    } catch {
-      message.error('Producto no encontrado');
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Producto no encontrado');
       setProductoEncontrado(null);
     } finally {
       setLoading(false);

@@ -129,6 +129,20 @@ export interface CajaVivoDTO {
   total: number;
 }
 
+/** Turno cerrado en la caja que aun tiene datos sin subir al central. */
+export interface TurnoPorSubirDTO {
+  turnoId: number;
+  noTurno: number;
+  caja: string;
+  cajero: string;
+  fechaCierre: string | null;
+  horaCierre: string;
+  facturasPendientes: number;
+  facturasError: number;
+  estadoCierre: string | null;
+  ultimoError: string | null;
+}
+
 // ─── Push SignalR (hub /hubs/monitoreo) ─────────────────────────────────
 
 /** Evento `FacturaCaja` del hub: avisa que una caja generó facturas nuevas. */

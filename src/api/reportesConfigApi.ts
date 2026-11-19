@@ -132,44 +132,4 @@ export const reportesConfigApi = {
       return { ok: false, error: detalle };
     }
   },
-
-  /** Obtiene una imagen del mismo ticket que se enviaria al agente local. */
-  previsualizarLocal: async (
-    payload: any,
-    urlOverride?: string,
-  ): Promise<{ ok: boolean; imagen?: Blob; error?: string }> => {
-    const urlServicioLocal = urlOverride || IMPRESSION_SERVICE_DEFAULT;
-    const urlBase = urlServicioLocal.replace(/\/+$/, '');
-    const urlPrevisualizacion = urlBase.endsWith('/imprimir')
-      ? `${urlBase.slice(0, -'/imprimir'.length)}/previsualizar`
-      : `${urlBase}/previsualizar`;
-    const body = typeof payload === 'string' ? JSON.parse(payload) : payload;
-
-    try {
-      const response = await apiClient.post(urlPrevisualizacion, body, {
-        params: { _t: Date.now() },
-        responseType: 'blob',
-      });
-      if (response.status !== 200) {
-        return { ok: false, error: 'El agente local no pudo generar la vista previa.' };
-      }
-
-      return { ok: true, imagen: response.data };
-    } catch (err: any) {
-      let detalle = err?.message ?? 'No se pudo comunicar con el agente local.';
-      const respuesta = err?.response?.data;
-      if (respuesta instanceof Blob) {
-        try {
-          const cuerpoError = JSON.parse(await respuesta.text());
-          detalle = cuerpoError?.error ?? detalle;
-        } catch {
-          // Conserva el error original cuando la respuesta no contiene JSON.
-        }
-      } else {
-        detalle = respuesta?.error ?? detalle;
-      }
-      console.error('[previsualizarLocal] Error:', detalle);
-      return { ok: false, error: detalle };
-    }
-  },
 };

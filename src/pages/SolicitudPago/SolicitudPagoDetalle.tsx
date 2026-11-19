@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import dayjs from 'dayjs';
 import {
   Card, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Typography, Tooltip, Descriptions, Alert, Modal, App, Switch,
 } from 'antd';
@@ -19,6 +20,9 @@ import { solicitudPagoApi } from '../../api/solicitudPagoApi';
 import { documentoRelacionApi } from '../../api/documentoRelacionApi';
 import type { DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
 import { apiClient } from '../../api/client';
+import type { FiltroImpresionLoteSolicitudPago } from '../../types/solicitudPago';
+import { imprimirSolicitudPagoLote } from '../../utils/imprimirSolicitudPagoLote';
+import ImprimirLoteModal from './ImprimirLoteModal';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard/TransaccionesAsociadasCard';
 import SucursalField from '../../components/SucursalField';
 import LogTable from '../../components/LogTable';
@@ -83,6 +87,16 @@ const SolicitudPagoDetalle: React.FC = () => {
   const [imprimiendo, setImprimiendo] = useState(false);
   const [pagoGenerado, setPagoGenerado] = useState<DocumentoRelacionDTO | null>(null);
   const [cargandoRelacion, setCargandoRelacion] = useState(false);
+  const [imprimirLoteOpen, setImprimirLoteOpen] = useState(false);
+
+  // Rango por defecto para la impresión en lote: mes de la fecha del documento.
+  const rangoLoteDefault = useMemo(() => {
+    const base = data?.fechaDocumento ? dayjs(data.fechaDocumento) : dayjs();
+    return {
+      desde: base.startOf('month').format('YYYYMMDDHHmmss'),
+      hasta: base.endOf('month').format('YYYYMMDDHHmmss'),
+    };
+  }, [data?.fechaDocumento]);
 
   // Módulo activo
   useEffect(() => {
@@ -292,6 +306,31 @@ const SolicitudPagoDetalle: React.FC = () => {
     }
   };
 
+  const handleImprimirDocumento = async () => {
+    setImprimiendo(true);
+    try {
+      const res = await apiClient.get(`/reportes/banco/solicitud-pago/${sucursalActiva}/${id}`, {
+        responseType: 'blob',
+      });
+      const blobUrl = URL.createObjectURL(res.data);
+      window.open(blobUrl, '_blank');
+    } catch {
+      message.error('Error al generar el PDF');
+    } finally {
+      setImprimiendo(false);
+    }
+  };
+
+  const handleImprimirLote = async (params: FiltroImpresionLoteSolicitudPago): Promise<boolean> => {
+    try {
+      await imprimirSolicitudPagoLote(sucursalActiva, params);
+      return true;
+    } catch (err: any) {
+      message.error(err?.message || 'Error al generar la impresión en lote');
+      return false;
+    }
+  };
+
   // Actualizar el título del header al alternar entre Original/Reverso
   useEffect(() => {
     if (mostrandoReverso && reversoData) {
@@ -357,44 +396,47 @@ const SolicitudPagoDetalle: React.FC = () => {
         onRevisado={handleRevisado}
         onDesaplicar={data?.autorizado ? undefined : handleDesaplicar}
         onReversar={handleReversar}
-        showImprimir={true}
-        imprimiendo={imprimiendo}
-        onImprimir={async () => {
-          setImprimiendo(true);
-          try {
-            const res = await apiClient.get(`/reportes/banco/solicitud-pago/${sucursalActiva}/${id}`, {
-              responseType: 'blob',
-            });
-            const blobUrl = URL.createObjectURL(res.data);
-            window.open(blobUrl, '_blank');
-          } catch {
-            message.error('Error al generar el PDF');
-          } finally {
-            setImprimiendo(false);
-          }
-        }}
-extraAcciones={id ? [
-          ...((toEstadoNum(data?.estado) === 1 || toEstadoNum(data?.estado) === 3) && data?.autorizado && (data as any)?.tipoPagoCodigo && pagoGeneradoDoc
-            ? [{
-                key: 'ver-pago-generado',
-                label: `Ver ${pagoGeneradoDoc}`,
-                icon: <EyeOutlined />,
-                onClick: handleVerPagoGenerado,
-              }]
-            : []),
-          ...((toEstadoNum(data?.estado) === 1 || toEstadoNum(data?.estado) === 3) && data?.autorizado && (data as any)?.tipoPagoCodigo && !pagoGeneradoDoc
-            ? [{
-                key: 'generar-pago',
-                label: `Generar ${(data as any)?.tipoPagoCodigo}`,
-                icon: <BankOutlined />,
-                tipo: 'primary' as const,
-                onClick: handleGenerarPago,
-                loading: saving || cargandoRelacion,
-                disabled: cargandoRelacion || (!!data.pagoGenerado && !pagoGeneradoDoc),
-                permiso: { permisoEspecial: 'pe_generar_DocBancario' },
-              }]
-            : []),
-        ] : undefined}
+        extraAcciones={[
+          {
+            key: 'imprimir',
+            label: 'Imprimir',
+            icon: <PrinterOutlined />,
+            soloIcono: true,
+            tooltip: 'Imprimir',
+            prioridad: 80,
+            permiso: { codigoPantalla: 'FSPA', accion: 'IMPRIMIR' },
+            disabled: saving || imprimiendo || operacion?.loading,
+            loading: imprimiendo,
+            menu: {
+              items: [
+                { key: 'imprimir-documento', label: 'Imprimir documento', onClick: handleImprimirDocumento },
+                { key: 'imprimir-lote', label: 'Imprimir en lote...', onClick: () => setImprimirLoteOpen(true) },
+              ],
+            },
+          },
+          ...(id ? [
+            ...((toEstadoNum(data?.estado) === 1 || toEstadoNum(data?.estado) === 3) && data?.autorizado && (data as any)?.tipoPagoCodigo && pagoGeneradoDoc
+              ? [{
+                  key: 'ver-pago-generado',
+                  label: `Ver ${pagoGeneradoDoc}`,
+                  icon: <EyeOutlined />,
+                  onClick: handleVerPagoGenerado,
+                }]
+              : []),
+            ...((toEstadoNum(data?.estado) === 1 || toEstadoNum(data?.estado) === 3) && data?.autorizado && (data as any)?.tipoPagoCodigo && !pagoGeneradoDoc
+              ? [{
+                  key: 'generar-pago',
+                  label: `Generar ${(data as any)?.tipoPagoCodigo}`,
+                  icon: <BankOutlined />,
+                  tipo: 'primary' as const,
+                  onClick: handleGenerarPago,
+                  loading: saving || cargandoRelacion,
+                  disabled: cargandoRelacion || (!!data.pagoGenerado && !pagoGeneradoDoc),
+                  permiso: { permisoEspecial: 'pe_generar_DocBancario' },
+                }]
+              : []),
+          ] : []),
+        ]}
         extraButtons={id ? (
           <>
             {toEstadoNum(data?.estado) === 3 && reversoData && (
@@ -626,6 +668,16 @@ extraAcciones={id ? [
         completado={operacion.completado}
         balanceInfo={operacion.balanceInfo}
         onClose={() => operacion.reset()}
+      />
+
+      {/* Impresión en lote de Solicitudes de Pago */}
+      <ImprimirLoteModal
+        open={imprimirLoteOpen}
+        onClose={() => setImprimirLoteOpen(false)}
+        sucursal={sucursalActiva}
+        rangoDefault={rangoLoteDefault}
+        documento={documentCode}
+        onImprimir={handleImprimirLote}
       />
     </div>
   );

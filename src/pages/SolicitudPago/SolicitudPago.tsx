@@ -1,11 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import { PrinterOutlined } from '@ant-design/icons';
 import { solicitudPagoApi } from '../../api/solicitudPagoApi';
+import type { FiltroImpresionLoteSolicitudPago } from '../../types/solicitudPago';
+import { imprimirSolicitudPagoLote } from '../../utils/imprimirSolicitudPagoLote';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
 import { useDocumentoListado } from '../../hooks/useDocumentoListado';
 import { useAuthStore } from '../../stores/authStore';
+import type { ToolbarAccion } from '../../components/ToolbarAcciones';
+import ImprimirLoteModal from './ImprimirLoteModal';
 import EntidadColumnCell from '../../components/EntidadColumnCell';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
 import FechaColumnCell from '../../components/FechaColumnCell';
@@ -40,6 +45,8 @@ const SolicitudPago: React.FC = () => {
     tituloError: 'Error al cargar solicitudes de pago',
   });
 
+  const [imprimirLoteOpen, setImprimirLoteOpen] = useState(false);
+
   const handleClonar = async () => {
     if (!state.selectedRow) return;
     try {
@@ -59,6 +66,43 @@ const SolicitudPago: React.FC = () => {
       message.error(err?.response?.data?.errorMessage || 'Error al obtener datos para clonar');
     }
   };
+
+  const handleImprimirLote = async (params: FiltroImpresionLoteSolicitudPago): Promise<boolean> => {
+    try {
+      await imprimirSolicitudPagoLote(sucursalActiva, params);
+      return true;
+    } catch (err: any) {
+      message.error(err?.message || 'Error al generar la impresión en lote');
+      return false;
+    }
+  };
+
+  const accionesItems: ToolbarAccion[] = [
+    {
+      key: 'imprimir',
+      label: 'Imprimir',
+      icon: <PrinterOutlined />,
+      soloIcono: true,
+      tooltip: 'Imprimir',
+      permiso: { accion: 'IMPRIMIR' },
+      prioridad: 60,
+      menu: {
+        items: [
+          {
+            key: 'imprimir-seleccionado',
+            label: 'Imprimir seleccionado',
+            disabled: !state.selectedRow,
+            onClick: actions.handleImprimir,
+          },
+          {
+            key: 'imprimir-lote',
+            label: 'Imprimir en lote...',
+            onClick: () => setImprimirLoteOpen(true),
+          },
+        ],
+      },
+    },
+  ];
 
   const columns: ColumnsType<TransaccionBancariaVistaDTO> = [
     {
@@ -131,46 +175,55 @@ const SolicitudPago: React.FC = () => {
   ];
 
   return (
-    <DocumentListadoLayout<TransaccionBancariaVistaDTO>
-      columns={columns}
-      data={state.data}
-      rowKey="id"
-      loading={state.loading}
-      total={state.total}
-      page={state.page}
-      pageSize={state.pageSize}
-      scrollX={1220}
-      selectedRowId={state.selectedRow?.id}
-      loadingError={state.loadingError}
-      errorMessage="Error al cargar solicitudes de pago"
-      onRefresh={actions.handleRefresh}
-      onRowClick={actions.handleRowClick}
-      onPageChange={actions.goToPage}
-      toolbarProps={{
-        showFiltros: true,
-        filtros: state.filtros,
-        rangoDefault,
-        opcionesEstado: ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO,
-        onFiltrosAplicar: actions.handleFiltrosAplicar,
-        searchPlaceholder: 'Buscar documento, entidad, concepto...',
-        onSearch: actions.handleSearch,
-        searchDefaultValue: state.searchText,
-        pageSize: state.pageSize,
-        onPageSizeChange: actions.handlePageSizeChange,
-        showCrear: true,
-        onCrear: () => navigate('/FSPA/nuevo'),
-        showClonar: true,
-        clonarDisabled: !state.selectedRow,
-        onClonar: handleClonar,
-        showImprimir: true,
-        imprimirDisabled: !state.selectedRow,
-        onImprimir: actions.handleImprimir,
-        showEditar: true,
-        editarDisabled: !puedeEditar,
-        onEditar: () => navigate(`/FSPA/${state.selectedRow!.id}/editar`),
-        onRefresh: actions.handleRefresh,
-      }}
-    />
+    <>
+      <DocumentListadoLayout<TransaccionBancariaVistaDTO>
+        columns={columns}
+        data={state.data}
+        rowKey="id"
+        loading={state.loading}
+        total={state.total}
+        page={state.page}
+        pageSize={state.pageSize}
+        scrollX={1220}
+        selectedRowId={state.selectedRow?.id}
+        loadingError={state.loadingError}
+        errorMessage="Error al cargar solicitudes de pago"
+        onRefresh={actions.handleRefresh}
+        onRowClick={actions.handleRowClick}
+        onPageChange={actions.goToPage}
+        toolbarProps={{
+          showFiltros: true,
+          filtros: state.filtros,
+          rangoDefault,
+          opcionesEstado: ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO,
+          onFiltrosAplicar: actions.handleFiltrosAplicar,
+          searchPlaceholder: 'Buscar documento, entidad, concepto...',
+          onSearch: actions.handleSearch,
+          searchDefaultValue: state.searchText,
+          pageSize: state.pageSize,
+          onPageSizeChange: actions.handlePageSizeChange,
+          showCrear: true,
+          onCrear: () => navigate('/FSPA/nuevo'),
+          showClonar: true,
+          clonarDisabled: !state.selectedRow,
+          onClonar: handleClonar,
+          accionesItems,
+          showEditar: true,
+          editarDisabled: !puedeEditar,
+          onEditar: () => navigate(`/FSPA/${state.selectedRow!.id}/editar`),
+          onRefresh: actions.handleRefresh,
+        }}
+      />
+
+      <ImprimirLoteModal
+        open={imprimirLoteOpen}
+        onClose={() => setImprimirLoteOpen(false)}
+        sucursal={sucursalActiva}
+        rangoDefault={rangoDefault}
+        documento={documentCode}
+        onImprimir={handleImprimirLote}
+      />
+    </>
   );
 };
 

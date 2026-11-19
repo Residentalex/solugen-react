@@ -31,6 +31,8 @@ interface DetalleToolbarProps {
   showImprimir?: boolean;
   confirmActions?: boolean;
   edicionSinRestricciones?: boolean;
+  /** Permiso de la accion Editar. Por defecto EDITAR en el modulo actual. */
+  editarPermiso?: { codigoPantalla?: string; accion?: string };
   /** Slot SOLO para controles no-acción (Switch "Reverso/Original", Tag, Select,
    *  Divider). Los botones de acción deben ir en `extraAcciones`. */
   extraButtons?: React.ReactNode;
@@ -58,6 +60,7 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
   onVolver, onImprimir, onImprimirTicket, onEditar, onAplicar, onAnular,
   onPostear, onRevisado, onDesaplicar, onReversar, onEliminar,
   showImprimir = true, confirmActions = true, edicionSinRestricciones = false,
+  editarPermiso,
   extraButtons, extraAcciones,
 }) => {
   const estadoNum = toEstadoNum(estado);
@@ -80,7 +83,7 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
           icon: <EditOutlined />,
           tipo: 'primary' as const,
           onClick: onEditar,
-          permiso: { codigoPantalla: modulo, accion: 'EDITAR' },
+          permiso: editarPermiso ?? { codigoPantalla: modulo, accion: 'EDITAR' },
           prioridad: 100,
           disabled: bloqueado,
         }]

@@ -1,12 +1,15 @@
 import { apiClient } from './client';
 import type { ApiResponse } from '../types/auth';
-import type { SecuenciaNCFListDTO } from '../types/contabilidad';
+import type { NcfCajaDTO } from '../types/ncf';
 
-const BASE = '/NCF';
+const BASE = '/Monitoreo';
 
 export const ncfApi = {
-  obtenerListado: async (sucursal: number): Promise<SecuenciaNCFListDTO[]> => {
-    const { data } = await apiClient.get<ApiResponse<SecuenciaNCFListDTO[]>>(`${BASE}/${sucursal}`);
+  /** Rangos NCF de cada caja de la sucursal. */
+  obtenerPorSucursal: async (sucursal: number): Promise<NcfCajaDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<NcfCajaDTO[]>>(
+      `${BASE}/ncf/${encodeURIComponent(String(sucursal))}`,
+    );
     return data.data ?? [];
   },
 };

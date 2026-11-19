@@ -5,9 +5,11 @@ import type { MonitoreoCajaDTO } from '../../types/monitoreo';
 interface CajaCardProps {
   caja: MonitoreoCajaDTO;
   onClick: (caja: MonitoreoCajaDTO) => void;
+  /** Turnos cerrados con datos pendientes de subir al central. */
+  porSubir?: number;
 }
 
-const CajaCard: React.FC<CajaCardProps> = ({ caja, onClick }) => {
+const CajaCard: React.FC<CajaCardProps> = ({ caja, onClick, porSubir = 0 }) => {
   return (
     <Card
       hoverable
@@ -84,6 +86,14 @@ const CajaCard: React.FC<CajaCardProps> = ({ caja, onClick }) => {
               No. {caja.noCaja}
             </span>
           </div>
+
+          {porSubir > 0 && (
+            <div style={{ marginTop: 6 }}>
+              <Tag color="gold" style={{ margin: 0, fontSize: 11 }}>
+                {porSubir} turno(s) por subir
+              </Tag>
+            </div>
+          )}
         </div>
       </div>
     </Card>
